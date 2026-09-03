@@ -1,0 +1,6 @@
+{
+  "name": "BB Companion",
+  "description": "BlackBerry Companion App for Android. Connects via Bluetooth SPP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
