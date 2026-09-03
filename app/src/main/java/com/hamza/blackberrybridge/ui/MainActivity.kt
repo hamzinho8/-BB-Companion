@@ -344,11 +344,12 @@ fun LogsContent() {
 
 @Composable
 fun SettingsContent(context: android.content.Context) {
-    val settings = remember { BridgeSettings(context) }
+    val dataStore = remember { com.hamza.blackberrybridge.settings.SettingsDataStore(context) }
+    val scope = rememberCoroutineScope()
     
-    var notifEnabled by remember { mutableStateOf(settings.isNotificationsEnabled) }
-    var callsEnabled by remember { mutableStateOf(settings.isCallsEnabled) }
-    var mediaEnabled by remember { mutableStateOf(settings.isMediaEnabled) }
+    val autoConnect by dataStore.autoConnectFlow.collectAsState(initial = true)
+    val notifEnabled by dataStore.notificationForwardingFlow.collectAsState(initial = true)
+    val mediaEnabled by dataStore.mediaControlFlow.collectAsState(initial = true)
     
     // Health checks
     val isNotifAllowed = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
@@ -369,14 +370,14 @@ fun SettingsContent(context: android.content.Context) {
 
         Text("Configuration", color = TextWhite, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 16.dp))
         
-        SettingsToggle("Enable Notifications", "Forward incoming messages", notifEnabled) { 
-            notifEnabled = it; settings.isNotificationsEnabled = it 
+        SettingsToggle("Auto-connect", "Automatically connect to BB", autoConnect) {
+            scope.launch { dataStore.setAutoConnect(it) }
         }
-        SettingsToggle("Enable Call Control", "Answer/Reject from BB", callsEnabled) { 
-            callsEnabled = it; settings.isCallsEnabled = it 
+        SettingsToggle("Notification forwarding", "Forward incoming messages", notifEnabled) {
+            scope.launch { dataStore.setNotificationForwarding(it) }
         }
-        SettingsToggle("Enable Media Sync", "Control Spotify/Music", mediaEnabled) { 
-            mediaEnabled = it; settings.isMediaEnabled = it 
+        SettingsToggle("Media control", "Control Spotify/Music", mediaEnabled) {
+            scope.launch { dataStore.setMediaControl(it) }
         }
     }
 }
