@@ -43,6 +43,9 @@ class BluetoothServer(private val service: BluetoothService) {
     }
 
     private suspend fun listenForConnections(adapter: BluetoothAdapter) {
+        var backoffDelay = 2000L
+        val maxDelay = 30000L
+
         while (currentCoroutineContext().isActive) {
             try {
                 serverSocket = adapter.listenUsingRfcommWithServiceRecord("BBCompanion", SPP_UUID)
@@ -50,16 +53,20 @@ class BluetoothServer(private val service: BluetoothService) {
                 
                 val socket = serverSocket?.accept()
                 if (socket != null) {
-                    Log.d(TAG, "Connected to ${socket.remoteDevice.name}")
+                    val deviceName = try { socket.remoteDevice.name } catch (e: SecurityException) { "Unknown" }
+                    Log.d(TAG, "Connected to $deviceName")
+                    backoffDelay = 2000L // Reset delay on successful connection
                     serverSocket?.close() // Only one connection at a time
                     manageConnectedSocket(socket)
                 }
             } catch (e: SecurityException) {
                 Log.e(TAG, "Missing Bluetooth permissions", e)
-                delay(5000)
+                delay(backoffDelay)
+                backoffDelay = (backoffDelay * 2).coerceAtMost(maxDelay)
             } catch (e: IOException) {
-                Log.e(TAG, "Server socket failed. Retrying...", e)
-                delay(5000)
+                Log.e(TAG, "Server socket failed. Retrying in ${backoffDelay}ms...", e)
+                delay(backoffDelay)
+                backoffDelay = (backoffDelay * 2).coerceAtMost(maxDelay)
             }
         }
     }

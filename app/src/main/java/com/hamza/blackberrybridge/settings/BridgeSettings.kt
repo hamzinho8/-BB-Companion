@@ -6,6 +6,10 @@ import android.content.SharedPreferences
 class BridgeSettings(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("bridge_settings", Context.MODE_PRIVATE)
 
+    var hasSeenOnboarding: Boolean
+        get() = prefs.getBoolean("has_seen_onboarding", false)
+        set(value) = prefs.edit().putBoolean("has_seen_onboarding", value).apply()
+
     var isNotificationsEnabled: Boolean
         get() = prefs.getBoolean("enable_notifications", true)
         set(value) = prefs.edit().putBoolean("enable_notifications", value).apply()
