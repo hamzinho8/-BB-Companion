@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "BB Companion"
+rootProject.name = "BB Compagnon"
 
 include(":app")
