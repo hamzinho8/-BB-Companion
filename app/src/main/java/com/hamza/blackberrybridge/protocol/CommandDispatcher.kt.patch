@@ -1,0 +1,22 @@
+--- app/src/main/java/com/hamza/blackberrybridge/protocol/CommandDispatcher.kt
++++ app/src/main/java/com/hamza/blackberrybridge/protocol/CommandDispatcher.kt
+@@ -10,6 +10,7 @@
+ import com.hamza.blackberrybridge.audio.SoundManager
+ import com.hamza.blackberrybridge.weather.WeatherManager
+ import com.hamza.blackberrybridge.voice.VoiceReplyManager
++import com.hamza.blackberrybridge.state.BridgeStateManager
+ 
+ object CommandDispatcher {
+     
+@@ -19,6 +20,11 @@
+             "HELLO", "READY" -> {
+                 // Handshake ready, can trigger initial sync
+             }
++            "BATTERY", "PHONE_BATTERY" -> {
++                if (packet.args.isNotEmpty()) {
++                    packet.args[0].toIntOrNull()?.let { BridgeStateManager.setBatteryLevel(it) }
++                }
++            }
+             "CALL_ANSWER" -> {
+                 if (packet.args.isNotEmpty()) CallController.answerCall(service, packet.args[0])
+             }

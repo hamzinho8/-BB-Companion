@@ -14,7 +14,6 @@ import androidx.core.app.NotificationCompat
 import com.hamza.blackberrybridge.ui.MainActivity
 
 class BluetoothService : Service() {
-
     companion object {
         const val CHANNEL_ID = "bridge_channel"
         const val NOTIFICATION_ID = 1
@@ -22,18 +21,19 @@ class BluetoothService : Service() {
             private set
     }
 
-    private var server: BluetoothServer? = null
+    var bluetoothManager: BBBluetoothManager? = null
+        private set
 
     private var batteryManager: com.hamza.blackberrybridge.battery.BatteryBridgeManager? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
+        com.hamza.blackberrybridge.state.BridgeStateManager.setServiceRunning(true)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("BlackBerry déconnecté"))
         
-        server = BluetoothServer(this)
-        server?.startServer()
+        bluetoothManager = BBBluetoothManager(this)
         
         batteryManager = com.hamza.blackberrybridge.battery.BatteryBridgeManager(this)
         batteryManager?.startMonitoring()
@@ -45,9 +45,10 @@ class BluetoothService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        server?.stopServer()
+        bluetoothManager?.disconnect()
         batteryManager?.stopMonitoring()
         instance = null
+        com.hamza.blackberrybridge.state.BridgeStateManager.setServiceRunning(false)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -74,7 +75,6 @@ class BluetoothService : Service() {
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("BlackBerrySmartBridge")
             .setContentText(text)
@@ -84,6 +84,6 @@ class BluetoothService : Service() {
     }
     
     fun sendPacket(packet: com.hamza.blackberrybridge.protocol.BSBPacket) {
-        server?.sendMessage(packet.toString())
+        bluetoothManager?.sendMessage(packet.toString())
     }
 }

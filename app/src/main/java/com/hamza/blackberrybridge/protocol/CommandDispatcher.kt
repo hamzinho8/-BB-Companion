@@ -9,6 +9,7 @@ import com.hamza.blackberrybridge.apps.AppLauncher
 import com.hamza.blackberrybridge.audio.SoundManager
 import com.hamza.blackberrybridge.weather.WeatherManager
 import com.hamza.blackberrybridge.voice.VoiceReplyManager
+import com.hamza.blackberrybridge.state.BridgeStateManager
 
 object CommandDispatcher {
     
@@ -18,14 +19,22 @@ object CommandDispatcher {
             "HELLO", "READY" -> {
                 // Handshake ready, can trigger initial sync
             }
+            "BATTERY", "PHONE_BATTERY" -> {
+                if (packet.args.isNotEmpty()) {
+                    packet.args[0].toIntOrNull()?.let { BridgeStateManager.setBatteryLevel(it) }
+                }
+            }
             "CALL_ANSWER" -> {
                 if (packet.args.isNotEmpty()) CallController.answerCall(service, packet.args[0])
+                    BridgeStateManager.logEvent("Appel répondu", com.hamza.blackberrybridge.state.EventType.SUCCESS)
             }
             "CALL_REJECT" -> {
                 if (packet.args.isNotEmpty()) CallController.rejectCall(service, packet.args[0])
+                    BridgeStateManager.logEvent("Appel rejeté", com.hamza.blackberrybridge.state.EventType.WARNING)
             }
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS" -> {
                 MediaSessionController.dispatchMediaCommand(service, packet.command)
+                BridgeStateManager.logEvent("Contrôle Média: ${packet.command}", com.hamza.blackberrybridge.state.EventType.INFO)
             }
             "CLIPBOARD" -> {
                 if (packet.args.isNotEmpty()) ClipboardManagerBridge.copyToAndroidClipboard(service, packet.args[0])
