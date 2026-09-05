@@ -4,6 +4,9 @@ import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
+
 import com.hamza.blackberrybridge.bluetooth.BluetoothService
 import com.hamza.blackberrybridge.protocol.BSBPacket
 import java.io.File
@@ -32,6 +35,11 @@ class BridgeNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
         if (packageName == applicationContext.packageName) return
+        
+        val dataStore = com.hamza.blackberrybridge.settings.SettingsDataStore(applicationContext)
+        val allowNotif = runBlocking { dataStore.notificationForwardingFlow.first() }
+        if (!allowNotif) return
+
 
         val id = sbn.key
         activeNotifications[id] = sbn
