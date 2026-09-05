@@ -16,6 +16,8 @@ import com.hamza.blackberrybridge.ui.MainActivity
 class BluetoothService : Service() {
     companion object {
         const val CHANNEL_ID = "bridge_channel"
+        const val ALERT_CHANNEL_ID = "bridge_alert_channel"
+        const val ALERT_NOTIFICATION_ID = 2
         const val NOTIFICATION_ID = 1
         var instance: BluetoothService? = null
             private set
@@ -53,16 +55,51 @@ class BluetoothService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "BlackBerry Smart Bridge",
                 NotificationManager.IMPORTANCE_LOW
             )
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
+            
+            val alertChannel = NotificationChannel(
+                ALERT_CHANNEL_ID,
+                "Alertes de Déconnexion",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            alertChannel.description = "Avertissements lorsque la connexion avec le BlackBerry est perdue"
+            alertChannel.enableVibration(true)
+            manager.createNotificationChannel(alertChannel)
         }
+    }
+
+
+    
+    fun showDisconnectionAlert(deviceName: String?) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        
+        val name = deviceName ?: "Votre BlackBerry"
+        val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
+            .setContentTitle("⚠️ Connexion Perdue")
+            .setContentText("$name s'est déconnecté inopinément.")
+            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+            
+        manager.notify(ALERT_NOTIFICATION_ID, notification)
     }
 
     fun updateNotification(message: String) {

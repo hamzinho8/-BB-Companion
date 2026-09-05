@@ -35,6 +35,7 @@ class BBBluetoothManager(private val context: Context) {
     
     private var activeSocket: BluetoothSocket? = null
     private var outWriter: PrintWriter? = null
+    private var isIntentionalDisconnect = false
     private var connectionJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     
@@ -90,6 +91,7 @@ class BBBluetoothManager(private val context: Context) {
     fun connectToDevice(device: BluetoothDevice, service: BluetoothService) {
         stopScanning()
         connectionJob?.cancel()
+        isIntentionalDisconnect = false
         
         connectionJob = scope.launch {
             try {
@@ -155,9 +157,15 @@ class BBBluetoothManager(private val context: Context) {
             socket.close()
             activeSocket = null
             outWriter = null
+            val wasIntentional = isIntentionalDisconnect
             withContext(Dispatchers.Main) {
                 service.updateNotification("○ BlackBerry déconnecté")
                 BridgeStateManager.setConnected(false, null)
+                
+                if (!wasIntentional) {
+                    service.showDisconnectionAlert(deviceName)
+                    BridgeStateManager.logEvent("Connexion perdue avec $deviceName", com.hamza.blackberrybridge.state.EventType.ERROR)
+                }
             }
         }
     }
@@ -175,6 +183,7 @@ class BBBluetoothManager(private val context: Context) {
     }
     
     fun disconnect() {
+        isIntentionalDisconnect = true
         connectionJob?.cancel()
         try {
             activeSocket?.close()

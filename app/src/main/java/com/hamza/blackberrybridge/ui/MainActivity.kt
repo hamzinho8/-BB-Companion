@@ -78,6 +78,9 @@ class MainActivity : ComponentActivity() {
             permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
             permissions.add(Manifest.permission.BLUETOOTH_SCAN)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
         permissions.add(Manifest.permission.READ_PHONE_STATE)
         permissions.add(Manifest.permission.ANSWER_PHONE_CALLS)
         permissions.add(Manifest.permission.READ_CONTACTS)
