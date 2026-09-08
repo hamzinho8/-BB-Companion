@@ -278,6 +278,7 @@ fun StatusContent(context: android.content.Context) {
     val deviceName by com.hamza.blackberrybridge.state.BridgeStateManager.deviceName.collectAsState()
     val discoveredDevices by com.hamza.blackberrybridge.state.BridgeStateManager.discoveredDevices.collectAsState()
     val batteryLevel by com.hamza.blackberrybridge.state.BridgeStateManager.batteryLevel.collectAsState()
+    val rssiLevel by com.hamza.blackberrybridge.state.BridgeStateManager.rssiLevel.collectAsState()
     val isServiceRunning by com.hamza.blackberrybridge.state.BridgeStateManager.isServiceRunning.collectAsState()
     val recentEvents by com.hamza.blackberrybridge.state.BridgeStateManager.recentEvents.collectAsState()
 
@@ -354,7 +355,7 @@ fun StatusContent(context: android.content.Context) {
                     if (isConnected) {
                         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             StatBox("Batterie", if (batteryLevel != null) "${batteryLevel}%" else "--", modifier = Modifier.weight(1f))
-                            StatBox("Sync.", "Actif", modifier = Modifier.weight(1f))
+                            SignalStrengthBox(rssiLevel, modifier = Modifier.weight(1f))
                         }
                         
                         Spacer(modifier = Modifier.height(24.dp))
@@ -400,7 +401,7 @@ fun StatusContent(context: android.content.Context) {
                     Text("Aucune activité récente.", color = TextMuted, fontSize = 12.sp, fontStyle = FontStyle.Italic)
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        recentEvents.forEach { event ->
+                        recentEvents.take(5).forEach { event ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(event.time, color = TextMuted, fontSize = 10.sp, modifier = Modifier.width(40.dp))
                                 val color = when(event.type) {
@@ -468,13 +469,27 @@ fun QuickActionBtn(label: String, icon: String, onClick: () -> Unit) {
 
 @Composable
 fun LogsContent() {
+    val events by com.hamza.blackberrybridge.state.BridgeStateManager.recentEvents.collectAsState()
+    
     Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
         Text("Journaux Système", color = TextWhite, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
         Column(
             modifier = Modifier.fillMaxWidth().weight(1f).background(Color.Black, RoundedCornerShape(12.dp)).padding(12.dp).verticalScroll(rememberScrollState())
         ) {
-            TerminalLine("[SYSTÈME] Journaux initialisés...", TerminalText, 1f)
-            TerminalLine("[SYSTÈME] Connexion Bluetooth SPP...", TextMuted, 0.8f)
+            if (events.isEmpty()) {
+                TerminalLine("[SYSTÈME] En attente d'événements...", TextMuted, 0.8f)
+            } else {
+                events.forEach { event ->
+                    val color = when(event.type) {
+                        com.hamza.blackberrybridge.state.EventType.SUCCESS -> AccentGreen
+                        com.hamza.blackberrybridge.state.EventType.WARNING -> AccentAmber
+                        com.hamza.blackberrybridge.state.EventType.ERROR -> AccentRed
+                        else -> TextWhite
+                    }
+                    val typeStr = event.type.name
+                    TerminalLine("[${event.time}] [$typeStr] ${event.description}", color, 1f)
+                }
+            }
         }
     }
 }
@@ -563,7 +578,7 @@ fun StatBox(label: String, value: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun TerminalLine(text: String, color: Color, alpha: Float, isItalic: Boolean = false) {
-    Text(text = text, color = color.copy(alpha = alpha), fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal, modifier = Modifier.padding(bottom = 4.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Text(text = text, color = color.copy(alpha = alpha), fontSize = 10.sp, fontFamily = FontFamily.Monospace, fontStyle = if (isItalic) FontStyle.Italic else FontStyle.Normal, modifier = Modifier.padding(bottom = 4.dp))
 }
 
 @Composable
@@ -684,5 +699,41 @@ fun PermissionToggle(icon: String, title: String, subtitle: String, isChecked: B
             },
             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = AccentGreen, uncheckedThumbColor = Color.Gray, uncheckedTrackColor = BgInner)
         )
+    }
+}
+
+@Composable
+fun SignalStrengthBox(rssi: Int?, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.background(BgInner, RoundedCornerShape(12.dp)).border(1.dp, BorderDark, RoundedCornerShape(12.dp)).padding(12.dp),
+        horizontalAlignment = Alignment.Start,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("Signal", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 6.dp))
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.height(24.dp)) {
+            val bars = when {
+                rssi == null -> 0
+                rssi >= -60 -> 4
+                rssi >= -70 -> 3
+                rssi >= -80 -> 2
+                else -> 1
+            }
+            
+            for (i in 1..4) {
+                val isActive = i <= bars
+                val color = if (isActive) AccentGreen else BorderLight
+                val barHeight = (i * 6).dp
+                Box(modifier = Modifier.width(6.dp).height(barHeight).background(color, RoundedCornerShape(2.dp)))
+            }
+            
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = if (rssi != null) "${rssi} dBm" else "--",
+                color = if (rssi != null) TextWhite else TextMuted,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.align(Alignment.CenterVertically)
+            )
+        }
     }
 }

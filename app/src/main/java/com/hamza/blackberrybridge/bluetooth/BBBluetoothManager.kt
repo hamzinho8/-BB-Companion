@@ -27,7 +27,7 @@ import java.util.UUID
 
 @SuppressLint("MissingPermission")
 class BBBluetoothManager(private val context: Context) {
-    private val SPP_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+    private val SPP_UUID: UUID = UUID.fromString("27b44265-43a7-4744-a6f1-c20531ae40f1")
     private val TAG = "BBBluetoothManager"
     
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -135,6 +135,17 @@ class BBBluetoothManager(private val context: Context) {
             
             // Handshake
             sendMessage("HELLO|BSB/1|ANDROID_DEVICE\n")
+            
+            // Launch simulated real-time RSSI updates
+            scope.launch {
+                while (currentCoroutineContext().isActive && socket.isConnected) {
+                    // Simulate RSSI between -40 (excellent) and -80 (weak)
+                    val baseRssi = -55
+                    val fluctuation = (-10..10).random()
+                    BridgeStateManager.setRssiLevel(baseRssi + fluctuation)
+                    delay(1500)
+                }
+            }
             
             while (currentCoroutineContext().isActive && socket.isConnected) {
                 val line = reader.readLine() ?: break

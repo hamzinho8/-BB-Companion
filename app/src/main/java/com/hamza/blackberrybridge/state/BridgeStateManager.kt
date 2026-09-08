@@ -30,6 +30,8 @@ object BridgeStateManager {
 
     private val _batteryLevel = MutableStateFlow<Int?>(null)
     val batteryLevel: StateFlow<Int?> = _batteryLevel.asStateFlow()
+    private val _rssiLevel = MutableStateFlow<Int?>(null)
+    val rssiLevel: StateFlow<Int?> = _rssiLevel.asStateFlow()
 
     private val _isServiceRunning = MutableStateFlow(false)
     val isServiceRunning: StateFlow<Boolean> = _isServiceRunning.asStateFlow()
@@ -45,13 +47,19 @@ object BridgeStateManager {
         }
         _isConnected.value = connected
         _deviceName.value = name
-        if (!connected) _batteryLevel.value = null
+        if (!connected) {
+            _batteryLevel.value = null
+            _rssiLevel.value = null
+        }
     }
 
     fun updateDiscoveredDevices(devices: List<BluetoothDevice>) {
         _discoveredDevices.value = devices
     }
 
+    fun setRssiLevel(level: Int?) {
+        _rssiLevel.value = level
+    }
     fun setBatteryLevel(level: Int) {
         _batteryLevel.value = level
     }
@@ -67,7 +75,7 @@ object BridgeStateManager {
         val newEvent = BridgeEvent(timeFormat.format(Date()), description, type)
         val current = _recentEvents.value.toMutableList()
         current.add(0, newEvent)
-        if (current.size > 5) {
+        if (current.size > 100) {
             current.removeAt(current.size - 1)
         }
         _recentEvents.value = current
