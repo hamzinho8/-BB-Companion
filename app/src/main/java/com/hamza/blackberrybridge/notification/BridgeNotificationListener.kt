@@ -57,6 +57,7 @@ class BridgeNotificationListener : NotificationListenerService() {
         }
 
         // NOTIFICATION|notif_id|app|sender|message
+        com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Notification interceptée: $appName", com.hamza.blackberrybridge.state.EventType.INFO)
         BluetoothService.instance?.sendPacket(BSBPacket("NOTIFICATION", listOf(id, appName, title, text)))
     }
 

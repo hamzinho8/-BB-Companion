@@ -15,7 +15,7 @@ data class BridgeEvent(
 )
 
 enum class EventType {
-    INFO, SUCCESS, WARNING, ERROR
+    INFO, SUCCESS, WARNING, ERROR, TX, RX
 }
 
 object BridgeStateManager {
@@ -39,7 +39,7 @@ object BridgeStateManager {
     private val _recentEvents = MutableStateFlow<List<BridgeEvent>>(emptyList())
     val recentEvents: StateFlow<List<BridgeEvent>> = _recentEvents.asStateFlow()
 
-    private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+    private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 
     fun setConnected(connected: Boolean, name: String? = null) {
         if (_isConnected.value != connected) {
@@ -75,7 +75,7 @@ object BridgeStateManager {
         val newEvent = BridgeEvent(timeFormat.format(Date()), description, type)
         val current = _recentEvents.value.toMutableList()
         current.add(0, newEvent)
-        if (current.size > 100) {
+        if (current.size > 500) {
             current.removeAt(current.size - 1)
         }
         _recentEvents.value = current

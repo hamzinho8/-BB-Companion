@@ -39,6 +39,7 @@ class BluetoothService : Service() {
         
         batteryManager = com.hamza.blackberrybridge.battery.BatteryBridgeManager(this)
         batteryManager?.startMonitoring()
+        com.hamza.blackberrybridge.media.MediaSessionController.startListening(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -49,6 +50,7 @@ class BluetoothService : Service() {
         super.onDestroy()
         bluetoothManager?.disconnect()
         batteryManager?.stopMonitoring()
+        com.hamza.blackberrybridge.media.MediaSessionController.stopListening(this)
         instance = null
         com.hamza.blackberrybridge.state.BridgeStateManager.setServiceRunning(false)
     }

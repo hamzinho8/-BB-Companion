@@ -408,6 +408,8 @@ fun StatusContent(context: android.content.Context) {
                                     com.hamza.blackberrybridge.state.EventType.SUCCESS -> AccentGreen
                                     com.hamza.blackberrybridge.state.EventType.WARNING -> AccentAmber
                                     com.hamza.blackberrybridge.state.EventType.ERROR -> AccentRed
+                                    com.hamza.blackberrybridge.state.EventType.TX -> Color(0xFF4FC3F7)
+                                    com.hamza.blackberrybridge.state.EventType.RX -> Color(0xFFCE93D8)
                                     else -> TextWhite
                                 }
                                 Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(color))
@@ -484,10 +486,16 @@ fun LogsContent() {
                         com.hamza.blackberrybridge.state.EventType.SUCCESS -> AccentGreen
                         com.hamza.blackberrybridge.state.EventType.WARNING -> AccentAmber
                         com.hamza.blackberrybridge.state.EventType.ERROR -> AccentRed
+                        com.hamza.blackberrybridge.state.EventType.TX -> Color(0xFF4FC3F7)
+                        com.hamza.blackberrybridge.state.EventType.RX -> Color(0xFFCE93D8)
                         else -> TextWhite
                     }
-                    val typeStr = event.type.name
-                    TerminalLine("[${event.time}] [$typeStr] ${event.description}", color, 1f)
+                    val prefix = when(event.type) {
+                        com.hamza.blackberrybridge.state.EventType.TX -> "→ [TX]"
+                        com.hamza.blackberrybridge.state.EventType.RX -> "← [RX]"
+                        else -> "[${event.type.name}]"
+                    }
+                    TerminalLine("[${event.time}] $prefix ${event.description}", color, 1f)
                 }
             }
         }

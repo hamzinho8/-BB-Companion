@@ -37,6 +37,9 @@ class BBBluetoothManager(private val context: Context) {
     private var outWriter: PrintWriter? = null
     private var isIntentionalDisconnect = false
     private var connectionJob: Job? = null
+    private var reconnectJob: Job? = null
+    private var lastDevice: BluetoothDevice? = null
+    private var lastService: BluetoothService? = null
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     
     
@@ -92,6 +95,12 @@ class BBBluetoothManager(private val context: Context) {
         stopScanning()
         connectionJob?.cancel()
         isIntentionalDisconnect = false
+        reconnectJob?.cancel()
+        lastDevice = device
+        lastService = service
+        reconnectJob?.cancel()
+        lastDevice = device
+        lastService = service
         
         connectionJob = scope.launch {
             try {
@@ -150,6 +159,7 @@ class BBBluetoothManager(private val context: Context) {
             while (currentCoroutineContext().isActive && socket.isConnected) {
                 val line = reader.readLine() ?: break
                 Log.d(TAG, "Received: $line")
+                BridgeStateManager.logEvent(line.trim(), com.hamza.blackberrybridge.state.EventType.RX)
                 
                 val packet = CommandParser.parse(line)
                 if (packet != null) {
@@ -175,7 +185,8 @@ class BBBluetoothManager(private val context: Context) {
                 
                 if (!wasIntentional) {
                     service.showDisconnectionAlert(deviceName)
-                    BridgeStateManager.logEvent("Connexion perdue avec $deviceName", com.hamza.blackberrybridge.state.EventType.ERROR)
+                    BridgeStateManager.logEvent("Connexion perdue avec $deviceName, tentative de reconnexion...", com.hamza.blackberrybridge.state.EventType.ERROR)
+                    attemptReconnect()
                 }
             }
         }
@@ -187,15 +198,34 @@ class BBBluetoothManager(private val context: Context) {
                 outWriter?.print(message)
                 outWriter?.flush()
                 Log.d(TAG, "Sent: $message")
+                BridgeStateManager.logEvent(message.trim(), com.hamza.blackberrybridge.state.EventType.TX)
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending message", e)
             }
         }
     }
     
+    
+    private fun attemptReconnect() {
+        if (isIntentionalDisconnect) return
+        val device = lastDevice ?: return
+        val service = lastService ?: return
+        
+        reconnectJob?.cancel()
+        reconnectJob = scope.launch {
+            BridgeStateManager.logEvent("Reconnexion dans 5s...", com.hamza.blackberrybridge.state.EventType.WARNING)
+            delay(5000)
+            if (!isIntentionalDisconnect) {
+                BridgeStateManager.logEvent("Nouvelle tentative de connexion à ${device.name ?: device.address}", com.hamza.blackberrybridge.state.EventType.INFO)
+                connectToDevice(device, service)
+            }
+        }
+    }
+
     fun disconnect() {
         isIntentionalDisconnect = true
         connectionJob?.cancel()
+        reconnectJob?.cancel()
         try {
             activeSocket?.close()
         } catch (e: IOException) {
