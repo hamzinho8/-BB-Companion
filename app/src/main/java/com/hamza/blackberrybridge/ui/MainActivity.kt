@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
         }
         permissions.add(Manifest.permission.READ_PHONE_STATE)
         permissions.add(Manifest.permission.ANSWER_PHONE_CALLS)
+        permissions.add(Manifest.permission.CALL_PHONE)
         permissions.add(Manifest.permission.READ_CONTACTS)
 
         val ungranted = permissions.filter {

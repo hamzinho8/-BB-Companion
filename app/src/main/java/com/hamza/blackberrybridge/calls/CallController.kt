@@ -23,6 +23,17 @@ object CallController {
                 try {
                     telecomManager.acceptRingingCall()
                     Log.d(TAG, "Call answered successfully")
+                    
+                    // Activer le haut-parleur automatiquement
+                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                        try {
+                            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                            audioManager.mode = android.media.AudioManager.MODE_IN_CALL
+                            audioManager.isSpeakerphoneOn = true
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to enable speakerphone", e)
+                        }
+                    }, 1500) // Délai pour laisser le temps à l'appel de s'établir
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to answer call", e)
                     sendError(context, callId, "FAILED", "EXCEPTION")
@@ -53,6 +64,35 @@ object CallController {
             }
         } else {
             sendError(context, callId, "FAILED", "RESTRICTED_API_LEVEL")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun makeCall(context: Context, phoneNumber: String) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
+            try {
+                val intent = android.content.Intent(android.content.Intent.ACTION_CALL)
+                intent.data = android.net.Uri.parse("tel:$phoneNumber")
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+                Log.d(TAG, "Initiated outbound call to $phoneNumber")
+                
+                // Optionnel : Activer le haut-parleur pour le kit mains-libres
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    try {
+                        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                        audioManager.mode = android.media.AudioManager.MODE_IN_CALL
+                        audioManager.isSpeakerphoneOn = true
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to enable speakerphone for outbound call", e)
+                    }
+                }, 2000)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to make call", e)
+                sendError(context, phoneNumber, "FAILED", "EXCEPTION")
+            }
+        } else {
+            sendError(context, phoneNumber, "FAILED", "RESTRICTED_PERMISSION_MISSING")
         }
     }
 

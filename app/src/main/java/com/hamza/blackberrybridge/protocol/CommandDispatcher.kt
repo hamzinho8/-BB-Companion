@@ -19,10 +19,15 @@ object CommandDispatcher {
             "HELLO", "READY" -> {
                 // Handshake ready, can trigger initial sync
             }
-            "BATTERY", "PHONE_BATTERY" -> {
+            "BATTERY" -> {
                 if (packet.args.isNotEmpty()) {
                     packet.args[0].toIntOrNull()?.let { BridgeStateManager.setBatteryLevel(it) }
                 }
+            }
+            "GET_PHONE_BATTERY" -> {
+                val batteryManager = service.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+                val batteryPct = batteryManager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                service.sendPacket(BSBPacket("PHONE_BATTERY", listOf(batteryPct.toString())))
             }
             "CALL_ANSWER" -> {
                 if (packet.args.isNotEmpty()) CallController.answerCall(service, packet.args[0])
@@ -31,6 +36,12 @@ object CommandDispatcher {
             "CALL_REJECT" -> {
                 if (packet.args.isNotEmpty()) CallController.rejectCall(service, packet.args[0])
                     BridgeStateManager.logEvent("Appel rejeté", com.hamza.blackberrybridge.state.EventType.WARNING)
+            }
+            "CALL_OUTBOUND" -> {
+                if (packet.args.isNotEmpty()) {
+                    CallController.makeCall(service, packet.args[0])
+                    BridgeStateManager.logEvent("Appel sortant: ${packet.args[0]}", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                }
             }
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS" -> {
                 MediaSessionController.dispatchMediaCommand(service, packet.command)
@@ -53,6 +64,13 @@ object CommandDispatcher {
             }
             "WEATHER" -> {
                 WeatherManager.fetchWeather(service)
+            }
+            "REPLY_MSG" -> {
+                if (packet.args.size >= 2) {
+                    val notifId = packet.args[0]
+                    val messageText = packet.args[1]
+                    com.hamza.blackberrybridge.notification.BridgeNotificationListener.instance?.replyToMessage(notifId, messageText)
+                }
             }
             "VOICE_REPLY" -> {
                 if (packet.args.size >= 2) {

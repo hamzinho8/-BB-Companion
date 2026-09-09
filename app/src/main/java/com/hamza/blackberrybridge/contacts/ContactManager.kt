@@ -13,6 +13,23 @@ import kotlinx.coroutines.launch
 object ContactManager {
     private const val TAG = "ContactManager"
     private const val MAX_RESULTS = 50 // Limit to avoid overloading Bluetooth buffer
+    
+    @SuppressLint("Range")
+    fun getContactNameByNumber(context: Context, phoneNumber: String): String {
+        if (phoneNumber.isEmpty() || phoneNumber == "Inconnu" || phoneNumber == "Unknown") return phoneNumber
+        try {
+            val uri = android.net.Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, android.net.Uri.encode(phoneNumber))
+            val cursor = context.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    return it.getString(it.getColumnIndex(ContactsContract.PhoneLookup.DISPLAY_NAME)) ?: phoneNumber
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error looking up contact name", e)
+        }
+        return phoneNumber
+    }
 
     @SuppressLint("Range")
     fun searchContacts(context: Context, query: String) {
@@ -30,7 +47,7 @@ object ContactManager {
                     arrayOf("%$query%"),
                     "${ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME} ASC LIMIT $MAX_RESULTS"
                 )
-
+                
                 cursor?.use {
                     var count = 0
                     while (it.moveToNext()) {

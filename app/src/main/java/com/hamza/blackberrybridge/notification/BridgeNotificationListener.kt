@@ -21,6 +21,7 @@ class BridgeNotificationListener : NotificationListenerService() {
     }
 
     private val activeNotifications = ConcurrentHashMap<String, StatusBarNotification>()
+    private val replyActions = ConcurrentHashMap<String, Notification.Action>()
 
     override fun onCreate() {
         super.onCreate()
@@ -44,6 +45,12 @@ class BridgeNotificationListener : NotificationListenerService() {
         val id = sbn.key
         activeNotifications[id] = sbn
 
+        sbn.notification.actions?.forEach { action ->
+            if (action.remoteInputs != null) {
+                replyActions[id] = action
+            }
+        }
+
         val extras = sbn.notification.extras
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
@@ -63,6 +70,26 @@ class BridgeNotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         activeNotifications.remove(sbn.key)
+    }
+
+    fun replyToMessage(notifId: String, replyText: String): Boolean {
+        val action = replyActions[notifId] ?: return false
+        val remoteInputs = action.remoteInputs ?: return false
+        val intent = android.content.Intent()
+        val bundle = android.os.Bundle()
+        for (input in remoteInputs) {
+            bundle.putCharSequence(input.resultKey, replyText)
+        }
+        android.app.RemoteInput.addResultsToIntent(remoteInputs, intent, bundle)
+        try {
+            action.actionIntent.send(this, 0, intent)
+            Log.d(TAG, "Reply sent successfully for $notifId")
+            com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Réponse envoyée: $replyText", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to send reply", e)
+        }
+        return false
     }
 
     fun replyWithAudio(notifId: String, audioFile: File): Boolean {

@@ -50,6 +50,7 @@ object WeatherManager {
                     
                     val condition = getWeatherCondition(weatherCode)
                     
+                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Météo récupérée: $temp°C, $condition", com.hamza.blackberrybridge.state.EventType.INFO)
                     // FORMAT: WEATHER|22|C|Soleil|Casablanca
                     service.sendPacket(BSBPacket("WEATHER", listOf(temp.toString(), "C", condition, "Casablanca")))
                 } else {

@@ -26,6 +26,7 @@ class BatteryBridgeManager(private val service: BluetoothService) {
                 // Avoid spamming Bluetooth. Only report significant changes.
                 if (lastReportedLevel == -1 || Math.abs(currentPct - lastReportedLevel) >= threshold) {
                     lastReportedLevel = currentPct
+                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Niveau de batterie (Android): $currentPct%", com.hamza.blackberrybridge.state.EventType.INFO)
                     service.sendPacket(BSBPacket("PHONE_BATTERY", listOf(currentPct.toString())))
                     Log.d(TAG, "Sent battery update: $currentPct%")
                 }

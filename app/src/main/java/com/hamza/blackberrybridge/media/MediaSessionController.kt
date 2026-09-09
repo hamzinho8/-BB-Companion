@@ -14,16 +14,36 @@ object MediaSessionController {
     private const val TAG = "MediaSessionController"
     private var currentController: MediaController? = null
     
-    private val callback = object : MediaController.Callback() {
+        private val callback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) {
             super.onMetadataChanged(metadata)
-            if (metadata == null) return
-            
-            val title = metadata.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Unknown"
-            val artist = metadata.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "Unknown"
-            com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Média détecté: $title - $artist", com.hamza.blackberrybridge.state.EventType.INFO)
-            BluetoothService.instance?.sendPacket(BSBPacket("MEDIA_META", listOf(title, artist)))
+            sendMediaUpdate()
         }
+        
+        override fun onPlaybackStateChanged(state: android.media.session.PlaybackState?) {
+            super.onPlaybackStateChanged(state)
+            sendMediaUpdate()
+        }
+    }
+
+    private fun sendMediaUpdate() {
+        val controller = currentController ?: return
+        val metadata = controller.metadata
+        val pbState = controller.playbackState
+
+        val title = metadata?.getString(MediaMetadata.METADATA_KEY_TITLE) ?: "Unknown"
+        val artist = metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST) ?: "Unknown"
+        
+        val stateStr = when (pbState?.state) {
+            android.media.session.PlaybackState.STATE_PLAYING -> "PLAYING"
+            android.media.session.PlaybackState.STATE_PAUSED -> "PAUSED"
+            android.media.session.PlaybackState.STATE_STOPPED -> "STOPPED"
+            else -> "UNKNOWN"
+        }
+
+        com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Média: $title - $artist ($stateStr)", com.hamza.blackberrybridge.state.EventType.INFO)
+        // FORMAT: MEDIA|Title|Artist|State
+        BluetoothService.instance?.sendPacket(BSBPacket("MEDIA", listOf(title, artist, stateStr)))
     }
 
     private val sessionListener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
@@ -36,7 +56,7 @@ object MediaSessionController {
         currentController = controller
         currentController?.registerCallback(callback)
         // trigger initial
-        currentController?.metadata?.let { callback.onMetadataChanged(it) }
+        sendMediaUpdate()
     }
 
     fun startListening(context: Context) {

@@ -1,14 +1,24 @@
 with open('app/src/main/java/com/hamza/blackberrybridge/protocol/CommandDispatcher.kt', 'r') as f:
     content = f.read()
 
-replacements = {
-    'CallController.answerCall(service, packet.args[0])': 'CallController.answerCall(service, packet.args[0])\n                    BridgeStateManager.logEvent("Appel répondu", com.hamza.blackberrybridge.state.EventType.SUCCESS)',
-    'CallController.rejectCall(service, packet.args[0])': 'CallController.rejectCall(service, packet.args[0])\n                    BridgeStateManager.logEvent("Appel rejeté", com.hamza.blackberrybridge.state.EventType.WARNING)',
-    'MediaSessionController.dispatchMediaCommand(service, packet.command)': 'MediaSessionController.dispatchMediaCommand(service, packet.command)\n                BridgeStateManager.logEvent("Contrôle Média: ${packet.command}", com.hamza.blackberrybridge.state.EventType.INFO)'
-}
+old_battery = """            "BATTERY", "PHONE_BATTERY" -> {
+                if (packet.args.isNotEmpty()) {
+                    packet.args[0].toIntOrNull()?.let { BridgeStateManager.setBatteryLevel(it) }
+                }
+            }"""
 
-for k, v in replacements.items():
-    content = content.replace(k, v)
+new_battery = """            "BATTERY" -> {
+                if (packet.args.isNotEmpty()) {
+                    packet.args[0].toIntOrNull()?.let { BridgeStateManager.setBatteryLevel(it) }
+                }
+            }
+            "GET_PHONE_BATTERY" -> {
+                val batteryManager = service.getSystemService(android.content.Context.BATTERY_SERVICE) as android.os.BatteryManager
+                val batteryPct = batteryManager.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                service.sendPacket(BSBPacket("PHONE_BATTERY", listOf(batteryPct.toString())))
+            }"""
+
+content = content.replace(old_battery, new_battery)
 
 with open('app/src/main/java/com/hamza/blackberrybridge/protocol/CommandDispatcher.kt', 'w') as f:
     f.write(content)
