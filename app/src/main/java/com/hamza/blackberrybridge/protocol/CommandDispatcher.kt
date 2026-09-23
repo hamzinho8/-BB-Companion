@@ -60,7 +60,10 @@ object CommandDispatcher {
                 SoundManager.findPhone(service)
             }
             "FIND_PHONE_STOP" -> {
-                SoundManager.stopFindPhone()
+                SoundManager.stopFindPhone(service, notifyBlackBerry = false)
+            }
+            "GET_NETWORK", "GET_CELL_INFO", "TELEMETRY" -> {
+                service.telemetryManager?.sendImmediateTelemetry()
             }
             "WEATHER" -> {
                 WeatherManager.fetchWeather(service)

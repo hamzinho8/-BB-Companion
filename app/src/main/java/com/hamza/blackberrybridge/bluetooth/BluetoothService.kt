@@ -27,6 +27,8 @@ class BluetoothService : Service() {
         private set
 
     private var batteryManager: com.hamza.blackberrybridge.battery.BatteryBridgeManager? = null
+    var telemetryManager: com.hamza.blackberrybridge.telemetry.NetworkTelemetryManager? = null
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -39,6 +41,8 @@ class BluetoothService : Service() {
         
         batteryManager = com.hamza.blackberrybridge.battery.BatteryBridgeManager(this)
         batteryManager?.startMonitoring()
+        telemetryManager = com.hamza.blackberrybridge.telemetry.NetworkTelemetryManager(this)
+        telemetryManager?.startMonitoring()
         com.hamza.blackberrybridge.media.MediaSessionController.startListening(this)
     }
 
@@ -50,6 +54,8 @@ class BluetoothService : Service() {
         super.onDestroy()
         bluetoothManager?.disconnect()
         batteryManager?.stopMonitoring()
+        telemetryManager?.stopMonitoring()
+        telemetryManager = null
         com.hamza.blackberrybridge.media.MediaSessionController.stopListening(this)
         instance = null
         com.hamza.blackberrybridge.state.BridgeStateManager.setServiceRunning(false)

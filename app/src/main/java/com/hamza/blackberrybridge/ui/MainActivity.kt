@@ -282,6 +282,8 @@ fun StatusContent(context: android.content.Context) {
     val rssiLevel by com.hamza.blackberrybridge.state.BridgeStateManager.rssiLevel.collectAsState()
     val isServiceRunning by com.hamza.blackberrybridge.state.BridgeStateManager.isServiceRunning.collectAsState()
     val recentEvents by com.hamza.blackberrybridge.state.BridgeStateManager.recentEvents.collectAsState()
+    val isAlarmRinging by com.hamza.blackberrybridge.state.BridgeStateManager.isAlarmRinging.collectAsState()
+    val networkTelemetry by com.hamza.blackberrybridge.state.BridgeStateManager.networkTelemetry.collectAsState()
 
     var isScanning by remember { mutableStateOf(false) }
 
@@ -290,6 +292,33 @@ fun StatusContent(context: android.content.Context) {
             modifier = Modifier.fillMaxSize().padding(20.dp).padding(bottom = 72.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
+            // Alarm ringing alert banner
+            if (isAlarmRinging) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF330A0A), RoundedCornerShape(16.dp))
+                        .border(2.dp, Color(0xFFFF3B30), RoundedCornerShape(16.dp))
+                        .padding(16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("🚨 ALARME EN COURS", color = Color(0xFFFF5252), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Déclenché depuis votre BlackBerry", color = TextWhite, fontSize = 12.sp)
+                    }
+                    Button(
+                        onClick = {
+                            com.hamza.blackberrybridge.audio.SoundManager.stopFindPhone(context, notifyBlackBerry = true)
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00C853)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Arrêter", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().background(BgCard, RoundedCornerShape(16.dp)).border(1.dp, BorderDark, RoundedCornerShape(16.dp)).padding(16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -389,6 +418,103 @@ fun StatusContent(context: android.content.Context) {
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // Telemetry Card
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(BgCard, RoundedCornerShape(24.dp))
+                    .border(1.dp, BorderDark, RoundedCornerShape(24.dp))
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("📡", fontSize = 20.sp)
+                        Column {
+                            Text("Télémesure Cellulaire & Réseau", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("Données transmises au BlackBerry", color = TextMuted, fontSize = 11.sp)
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(if (networkTelemetry.isConnected) AccentGreen.copy(alpha = 0.15f) else AccentRed.copy(alpha = 0.15f), RoundedCornerShape(50))
+                            .border(1.dp, if (networkTelemetry.isConnected) AccentGreen else AccentRed, RoundedCornerShape(50))
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            if (networkTelemetry.isConnected) "EN LIGNE" else "HORS LIGNE",
+                            color = if (networkTelemetry.isConnected) AccentGreen else AccentRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    // Operator & Generation
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(BgInner, RoundedCornerShape(14.dp))
+                            .border(1.dp, BorderDark, RoundedCornerShape(14.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text("Opérateur", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text(networkTelemetry.carrier, color = TextWhite, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFF007BFF).copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(networkTelemetry.networkType, color = Color(0xFF64B5F6), fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                        }
+                    }
+
+                    // Cellular Signal Bars
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(BgInner, RoundedCornerShape(14.dp))
+                            .border(1.dp, BorderDark, RoundedCornerShape(14.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text("Signal Cellulaire", color = TextMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Row(
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.height(26.dp).padding(top = 4.dp)
+                        ) {
+                            for (i in 1..4) {
+                                val isActive = i <= networkTelemetry.signalBars
+                                val color = if (isActive) AccentGreen else BorderLight
+                                val barHeight = (i * 6).dp
+                                Box(modifier = Modifier.width(6.dp).height(barHeight).background(color, RoundedCornerShape(2.dp)))
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "${networkTelemetry.signalBars}/4",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.CenterVertically)
+                            )
+                        }
+                        Text("MAJ auto / 30s", color = TextMuted, fontSize = 9.sp, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }

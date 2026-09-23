@@ -18,6 +18,14 @@ enum class EventType {
     INFO, SUCCESS, WARNING, ERROR, TX, RX
 }
 
+data class NetworkTelemetry(
+    val carrier: String = "Recherche...",
+    val networkType: String = "NONE",
+    val signalBars: Int = 0,
+    val isConnected: Boolean = false,
+    val transport: String = "NONE"
+)
+
 object BridgeStateManager {
     private val _isConnected = MutableStateFlow(false)
     val isConnected: StateFlow<Boolean> = _isConnected.asStateFlow()
@@ -30,6 +38,7 @@ object BridgeStateManager {
 
     private val _batteryLevel = MutableStateFlow<Int?>(null)
     val batteryLevel: StateFlow<Int?> = _batteryLevel.asStateFlow()
+
     private val _rssiLevel = MutableStateFlow<Int?>(null)
     val rssiLevel: StateFlow<Int?> = _rssiLevel.asStateFlow()
 
@@ -38,6 +47,12 @@ object BridgeStateManager {
 
     private val _recentEvents = MutableStateFlow<List<BridgeEvent>>(emptyList())
     val recentEvents: StateFlow<List<BridgeEvent>> = _recentEvents.asStateFlow()
+
+    private val _isAlarmRinging = MutableStateFlow(false)
+    val isAlarmRinging: StateFlow<Boolean> = _isAlarmRinging.asStateFlow()
+
+    private val _networkTelemetry = MutableStateFlow(NetworkTelemetry())
+    val networkTelemetry: StateFlow<NetworkTelemetry> = _networkTelemetry.asStateFlow()
 
     private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault())
 
@@ -60,8 +75,17 @@ object BridgeStateManager {
     fun setRssiLevel(level: Int?) {
         _rssiLevel.value = level
     }
+
     fun setBatteryLevel(level: Int) {
         _batteryLevel.value = level
+    }
+
+    fun setAlarmRinging(ringing: Boolean) {
+        _isAlarmRinging.value = ringing
+    }
+
+    fun updateNetworkTelemetry(telemetry: NetworkTelemetry) {
+        _networkTelemetry.value = telemetry
     }
 
     fun setServiceRunning(isRunning: Boolean) {
