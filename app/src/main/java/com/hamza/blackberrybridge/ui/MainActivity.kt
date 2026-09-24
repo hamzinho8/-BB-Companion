@@ -72,6 +72,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (com.hamza.blackberrybridge.media.MediaSessionController.hasNotificationAccess(this)) {
+            com.hamza.blackberrybridge.media.MediaSessionController.startListening(this)
+        }
+    }
+
     private fun requestPermissions() {
         val permissions = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

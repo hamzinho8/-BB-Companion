@@ -33,6 +33,18 @@ class BridgeNotificationListener : NotificationListenerService() {
         instance = null
     }
 
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        Log.d(TAG, "Notification listener connected by system.")
+        com.hamza.blackberrybridge.media.MediaSessionController.startListening(this)
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        Log.d(TAG, "Notification listener disconnected.")
+        com.hamza.blackberrybridge.media.MediaSessionController.stopListening(this)
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
         if (packageName == applicationContext.packageName) return

@@ -6,6 +6,7 @@ import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.util.Log
+import androidx.core.app.NotificationManagerCompat
 import com.hamza.blackberrybridge.bluetooth.BluetoothService
 import com.hamza.blackberrybridge.notification.BridgeNotificationListener
 import com.hamza.blackberrybridge.protocol.BSBPacket
@@ -13,8 +14,17 @@ import com.hamza.blackberrybridge.protocol.BSBPacket
 object MediaSessionController {
     private const val TAG = "MediaSessionController"
     private var currentController: MediaController? = null
+    private var isListening = false
+
+    fun hasNotificationAccess(context: Context): Boolean {
+        return try {
+            NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
+        } catch (e: Exception) {
+            false
+        }
+    }
     
-        private val callback = object : MediaController.Callback() {
+    private val callback = object : MediaController.Callback() {
         override fun onMetadataChanged(metadata: MediaMetadata?) {
             super.onMetadataChanged(metadata)
             sendMediaUpdate()
@@ -60,27 +70,44 @@ object MediaSessionController {
     }
 
     fun startListening(context: Context) {
+        if (!hasNotificationAccess(context)) {
+            Log.d(TAG, "Notification listener permission not yet granted; media session control is paused until authorized.")
+            return
+        }
+        if (isListening) return
+
         try {
             val component = ComponentName(context, BridgeNotificationListener::class.java)
-            val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-            manager.addOnActiveSessionsChangedListener(sessionListener, component)
-            val controllers = manager.getActiveSessions(component)
-            updateActiveController(controllers.firstOrNull())
+            val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            if (manager != null) {
+                manager.addOnActiveSessionsChangedListener(sessionListener, component)
+                isListening = true
+                val controllers = manager.getActiveSessions(component)
+                updateActiveController(controllers.firstOrNull())
+                Log.d(TAG, "MediaSession listening started successfully.")
+            }
         } catch (e: SecurityException) {
-            Log.e(TAG, "Missing Notification Listener permission for MediaSessions", e)
+            Log.d(TAG, "Notification listener permission pending in settings for MediaSessions: ${e.message}")
         } catch (e: Exception) {
-            Log.e(TAG, "Error starting media session listening", e)
+            Log.w(TAG, "Error starting media session listening: ${e.message}")
         }
     }
 
     fun stopListening(context: Context) {
-        try {
-            val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
-            manager.removeOnActiveSessionsChangedListener(sessionListener)
+        if (!isListening) {
             currentController?.unregisterCallback(callback)
             currentController = null
+            return
+        }
+        try {
+            val manager = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as? MediaSessionManager
+            manager?.removeOnActiveSessionsChangedListener(sessionListener)
+            currentController?.unregisterCallback(callback)
+            currentController = null
+            isListening = false
+            Log.d(TAG, "MediaSession listening stopped.")
         } catch (e: Exception) {
-            Log.e(TAG, "Error stopping media session listening", e)
+            Log.w(TAG, "Error stopping media session listening: ${e.message}")
         }
     }
 
