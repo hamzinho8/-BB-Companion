@@ -18,6 +18,18 @@ object ContactManager {
     fun getContactNameByNumber(context: Context, phoneNumber: String): String {
         if (phoneNumber.isEmpty() || phoneNumber == "Inconnu" || phoneNumber == "Unknown") return phoneNumber
         try {
+            // First check in VIP contacts (fastest)
+            VipContactManager.init(context)
+            val vips = VipContactManager.vipContacts.value
+            val matchVip = vips.firstOrNull { 
+                val clean1 = it.number.replace(" ", "").replace("-", "")
+                val clean2 = phoneNumber.replace(" ", "").replace("-", "")
+                clean1.endsWith(clean2) || clean2.endsWith(clean1)
+            }
+            if (matchVip != null) {
+                return matchVip.name
+            }
+
             val uri = android.net.Uri.withAppendedPath(ContactsContract.PhoneLookup.CONTENT_FILTER_URI, android.net.Uri.encode(phoneNumber))
             val cursor = context.contentResolver.query(uri, arrayOf(ContactsContract.PhoneLookup.DISPLAY_NAME), null, null, null)
             cursor?.use {
@@ -35,6 +47,30 @@ object ContactManager {
     fun searchContacts(context: Context, query: String) {
         GlobalScope.launch(Dispatchers.IO) {
             val service = context as? BluetoothService ?: return@launch
+            VipContactManager.init(context)
+            val vips = VipContactManager.vipContacts.value
+
+            // If user configured selective VIP contacts, and query is empty/all or matches VIPs:
+            if (vips.isNotEmpty()) {
+                val cleanQuery = query.trim().lowercase()
+                val matchingVips = if (cleanQuery.isEmpty() || cleanQuery == "all" || cleanQuery == "vip" || cleanQuery == "*") {
+                    vips
+                } else {
+                    vips.filter { it.name.lowercase().contains(cleanQuery) || it.number.contains(cleanQuery) }
+                }
+
+                if (matchingVips.isNotEmpty() || cleanQuery.isEmpty() || cleanQuery == "all") {
+                    service.sendPacket(BSBPacket("CONTACTS_START", listOf(matchingVips.size.toString(), "VIP")))
+                    for (c in matchingVips) {
+                        service.sendPacket(BSBPacket("CONTACT", listOf(c.id, c.name, c.number)))
+                    }
+                    service.sendPacket(BSBPacket("CONTACTS_END", listOf(matchingVips.size.toString())))
+                    Log.d(TAG, "Returned ${matchingVips.size} selective VIP contacts")
+                    return@launch
+                }
+            }
+
+            // Otherwise, fallback to system contacts search
             try {
                 val cursor = context.contentResolver.query(
                     ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
@@ -51,7 +87,7 @@ object ContactManager {
                 cursor?.use {
                     var count = 0
                     while (it.moveToNext()) {
-                        val id = it.getString(it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID))
+                        val id = it.getString(it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID)) ?: ""
                         val name = it.getString(it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)) ?: "Unknown"
                         val number = it.getString(it.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)) ?: ""
                         

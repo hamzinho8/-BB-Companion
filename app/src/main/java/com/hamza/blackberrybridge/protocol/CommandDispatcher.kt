@@ -51,7 +51,11 @@ object CommandDispatcher {
                 if (packet.args.isNotEmpty()) ClipboardManagerBridge.copyToAndroidClipboard(service, packet.args[0])
             }
             "CONTACT_SEARCH" -> {
-                if (packet.args.isNotEmpty()) ContactManager.searchContacts(service, packet.args[0])
+                val query = if (packet.args.isNotEmpty()) packet.args[0] else ""
+                ContactManager.searchContacts(service, query)
+            }
+            "SYNC_CONTACTS", "GET_CONTACTS", "GET_VIP" -> {
+                com.hamza.blackberrybridge.contacts.VipContactManager.syncVipContactsToBlackBerry(service)
             }
             "OPEN_APP" -> {
                 if (packet.args.isNotEmpty()) AppLauncher.launchApp(service, packet.args[0])

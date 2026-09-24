@@ -274,6 +274,7 @@ fun MainScreen(modifier: Modifier = Modifier) {
 @Composable
 fun StatusContent(context: android.content.Context) {
     var showControlPanel by remember { mutableStateOf(false) }
+    var showVipPicker by remember { mutableStateOf(false) }
     val haptic = LocalHapticFeedback.current
     val isConnected by com.hamza.blackberrybridge.state.BridgeStateManager.isConnected.collectAsState()
     val deviceName by com.hamza.blackberrybridge.state.BridgeStateManager.deviceName.collectAsState()
@@ -519,6 +520,11 @@ fun StatusContent(context: android.content.Context) {
                 }
             }
 
+            // VIP Contacts Selective Sync Card
+            VipContactsCard(
+                onOpenPicker = { showVipPicker = true }
+            )
+
             // Recent Events
             Column(
                 modifier = Modifier.fillMaxWidth().background(BgCard, RoundedCornerShape(24.dp)).border(1.dp, BorderDark, RoundedCornerShape(24.dp)).padding(20.dp)
@@ -556,6 +562,15 @@ fun StatusContent(context: android.content.Context) {
             deviceName = deviceName ?: "BlackBerry",
             onDismiss = { showControlPanel = false },
             context = context
+        )
+    }
+
+    if (showVipPicker) {
+        VipContactPickerModal(
+            onDismiss = { showVipPicker = false },
+            onSyncNow = {
+                com.hamza.blackberrybridge.contacts.VipContactManager.syncVipContactsToBlackBerry(context)
+            }
         )
     }
 
