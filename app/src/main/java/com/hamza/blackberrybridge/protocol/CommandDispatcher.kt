@@ -61,25 +61,26 @@ object CommandDispatcher {
                 }
             }
             "SPEAKER_TOGGLE" -> {
-                val newState = com.hamza.blackberrybridge.telephony.SimManager.toggleSpeakerphone(service)
-                service.sendPacket(BSBPacket("SPEAKER_STATUS", listOf(if (newState) "ON" else "OFF")))
-                BridgeStateManager.logEvent("Haut-parleur: ${if (newState) "ON" else "OFF"}", com.hamza.blackberrybridge.state.EventType.INFO)
+                com.hamza.blackberrybridge.telephony.SimManager.toggleSpeakerphone(service)
             }
             "SPEAKER_ON" -> {
-                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
-                audioManager?.mode = android.media.AudioManager.MODE_IN_CALL
-                audioManager?.isSpeakerphoneOn = true
+                com.hamza.blackberrybridge.telephony.SimManager.setAudioRoute(service, com.hamza.blackberrybridge.telephony.SimManager.AUDIO_SPEAKERPHONE)
+                com.hamza.blackberrybridge.telephony.SimManager.applyCallAudioRoute(service)
                 service.sendPacket(BSBPacket("SPEAKER_STATUS", listOf("ON")))
+                BridgeStateManager.logEvent("Haut-parleur forcé: ON", com.hamza.blackberrybridge.state.EventType.INFO)
             }
             "SPEAKER_OFF" -> {
-                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
-                audioManager?.isSpeakerphoneOn = false
+                com.hamza.blackberrybridge.telephony.SimManager.setAudioRoute(service, com.hamza.blackberrybridge.telephony.SimManager.AUDIO_EARPIECE)
+                com.hamza.blackberrybridge.telephony.SimManager.applyCallAudioRoute(service)
                 service.sendPacket(BSBPacket("SPEAKER_STATUS", listOf("OFF")))
+                BridgeStateManager.logEvent("Haut-parleur forcé: OFF", com.hamza.blackberrybridge.state.EventType.INFO)
             }
             "AUDIO_ROUTE" -> {
                 if (packet.args.isNotEmpty()) {
-                    com.hamza.blackberrybridge.telephony.SimManager.setAudioRoute(service, packet.args[0])
+                    val requestedRoute = packet.args[0]
+                    com.hamza.blackberrybridge.telephony.SimManager.setAudioRoute(service, requestedRoute)
                     com.hamza.blackberrybridge.telephony.SimManager.applyCallAudioRoute(service)
+                    service.sendPacket(BSBPacket("AUDIO_ROUTE_OK", listOf(requestedRoute)))
                 }
             }
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS" -> {

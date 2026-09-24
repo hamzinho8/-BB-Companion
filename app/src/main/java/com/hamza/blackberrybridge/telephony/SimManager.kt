@@ -3,15 +3,23 @@ package com.hamza.blackberrybridge.telephony
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.telecom.PhoneAccountHandle
 import android.telecom.TelecomManager
 import android.telephony.SubscriptionInfo
 import android.telephony.SubscriptionManager
 import android.util.Log
+import com.hamza.blackberrybridge.bluetooth.BluetoothService
+import com.hamza.blackberrybridge.calls.BridgeInCallService
+import com.hamza.blackberrybridge.protocol.BSBPacket
+import com.hamza.blackberrybridge.state.BridgeStateManager
+import com.hamza.blackberrybridge.state.EventType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,7 +57,14 @@ object SimManager {
     private val _audioRoute = MutableStateFlow(AUDIO_SPEAKERPHONE)
     val audioRoute: StateFlow<String> = _audioRoute.asStateFlow()
 
+    private val _isBluetoothAudioConnected = MutableStateFlow(false)
+    val isBluetoothAudioConnected: StateFlow<Boolean> = _isBluetoothAudioConnected.asStateFlow()
+
+    private val _connectedAudioDeviceName = MutableStateFlow<String?>(null)
+    val connectedAudioDeviceName: StateFlow<String?> = _connectedAudioDeviceName.asStateFlow()
+
     private var isInitialized = false
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun init(context: Context) {
         if (!isInitialized) {
@@ -59,6 +74,7 @@ object SimManager {
             isInitialized = true
         }
         refreshSims(context)
+        checkBluetoothAudioDevices(context)
     }
 
     private fun getPrefs(context: Context): SharedPreferences {
@@ -75,6 +91,7 @@ object SimManager {
         init(context)
         getPrefs(context).edit().putString(KEY_AUDIO_ROUTE, route).apply()
         _audioRoute.value = route
+        Log.d(TAG, "Audio route changed to: $route")
     }
 
     @SuppressLint("MissingPermission")
@@ -141,12 +158,41 @@ object SimManager {
     }
 
     /**
-     * Resolves which SIM to use for an outgoing call.
-     * Takes into account:
-     * 1. explicit requested slot (if user tapped SIM 1 or SIM 2 on BlackBerry)
-     * 2. user preferred slot configured in Android settings
-     * 3. fallback to SIM 1
+     * Inspects connected Bluetooth audio devices (HFP/SCO or Headsets)
      */
+    fun checkBluetoothAudioDevices(context: Context): Boolean {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
+        var hasBt = false
+        var devName: String? = null
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val commDevices = audioManager.availableCommunicationDevices
+            val bt = commDevices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+            }
+            if (bt != null) {
+                hasBt = true
+                devName = bt.productName?.toString() ?: "Périphérique Bluetooth"
+            }
+        } else {
+            val devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
+            val bt = devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+            }
+            if (bt != null) {
+                hasBt = true
+                devName = bt.productName?.toString() ?: "Périphérique Bluetooth"
+            }
+        }
+
+        _isBluetoothAudioConnected.value = hasBt
+        _connectedAudioDeviceName.value = devName
+        return hasBt
+    }
+
     fun resolveTargetSim(context: Context, requestedSlot: Int? = null): SimCardInfo? {
         val sims = refreshSims(context)
         if (sims.isEmpty()) return null
@@ -163,60 +209,142 @@ object SimManager {
     }
 
     /**
-     * Configures the audio routing for speaking and listening during the call
+     * Applies the configured audio route with multi-stage pulses to ensure
+     * that even if the system dialer UI resets audio state during call establishment,
+     * the requested routing (Speakerphone, Bluetooth SCO, or Earpiece) stays locked.
      */
     fun applyCallAudioRoute(context: Context) {
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
         val route = _audioRoute.value
+        Log.d(TAG, "Requesting audio route: $route")
 
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            try {
-                audioManager.mode = AudioManager.MODE_IN_CALL
+        // 1. Immediate Telecom InCallService routing if available
+        BridgeInCallService.applyAudioRoute(route)
 
-                when (route) {
-                    AUDIO_SPEAKERPHONE -> {
-                        // Loudspeaker handsfree (optimal for talking/listening from desk or pocket)
-                        audioManager.isSpeakerphoneOn = true
-                        Log.d(TAG, "Audio routed to Loudspeaker (Speakerphone ON)")
-                    }
-                    AUDIO_BLUETOOTH -> {
-                        // Attempt Bluetooth SCO audio link
-                        try {
-                            audioManager.isSpeakerphoneOn = false
-                            audioManager.startBluetoothSco()
-                            audioManager.isBluetoothScoOn = true
-                            Log.d(TAG, "Audio routed to Bluetooth SCO")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Bluetooth SCO failed, falling back to speakerphone", e)
-                            audioManager.isSpeakerphoneOn = true
-                        }
-                    }
-                    AUDIO_EARPIECE -> {
-                        audioManager.isSpeakerphoneOn = false
-                        try {
-                            if (audioManager.isBluetoothScoOn) {
-                                audioManager.stopBluetoothSco()
-                                audioManager.isBluetoothScoOn = false
-                            }
-                        } catch (e: Exception) {
-                            // ignore
-                        }
-                        Log.d(TAG, "Audio routed to normal phone earpiece")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error applying audio route", e)
-            }
-        }, 1200)
+        // 2. Hardware AudioManager enforcement schedule (0ms, 400ms, 1200ms, 2500ms, 4000ms)
+        val delays = listOf(50L, 400L, 1200L, 2500L, 4000L)
+        for (delay in delays) {
+            mainHandler.postDelayed({
+                executeDirectAudioRoute(context, route)
+                BridgeInCallService.applyAudioRoute(route)
+            }, delay)
+        }
     }
 
     /**
-     * Toggles Speakerphone state directly during a call
+     * Executes the direct audio routing commands against AudioManager
+     */
+    private fun executeDirectAudioRoute(context: Context, route: String) {
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
+        try {
+            // Unmute voice call audio and ensure volume is audible
+            try {
+                val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+                val curVol = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
+                if (curVol < maxVol / 2) {
+                    audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, (maxVol * 0.85).toInt(), 0)
+                }
+            } catch (e: Exception) {
+                // non fatal
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Modern Android (API 31+ Android 12, 13, 14, 15)
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                val commDevices = audioManager.availableCommunicationDevices
+
+                when (route) {
+                    AUDIO_SPEAKERPHONE -> {
+                        val speaker = commDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                        if (speaker != null) {
+                            val ok = audioManager.setCommunicationDevice(speaker)
+                            Log.d(TAG, "setCommunicationDevice(SPEAKER): success=$ok")
+                        }
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = true
+                    }
+                    AUDIO_BLUETOOTH -> {
+                        val btDevice = commDevices.firstOrNull {
+                            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO ||
+                            it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+                        }
+                        if (btDevice != null) {
+                            val ok = audioManager.setCommunicationDevice(btDevice)
+                            Log.d(TAG, "setCommunicationDevice(BLUETOOTH): success=$ok (${btDevice.productName})")
+                        } else {
+                            Log.w(TAG, "No Bluetooth device in availableCommunicationDevices, trying startBluetoothSco")
+                            @Suppress("DEPRECATION")
+                            audioManager.startBluetoothSco()
+                            @Suppress("DEPRECATION")
+                            audioManager.isBluetoothScoOn = true
+                        }
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = false
+                    }
+                    AUDIO_EARPIECE -> {
+                        audioManager.clearCommunicationDevice()
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = false
+                        @Suppress("DEPRECATION")
+                        if (audioManager.isBluetoothScoOn) {
+                            audioManager.stopBluetoothSco()
+                            audioManager.isBluetoothScoOn = false
+                        }
+                    }
+                }
+            } else {
+                // Legacy Android (API 26-30)
+                try {
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                } catch (e: Exception) {
+                    // ignore
+                }
+
+                when (route) {
+                    AUDIO_SPEAKERPHONE -> {
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = true
+                        Log.d(TAG, "Legacy Speakerphone ON")
+                    }
+                    AUDIO_BLUETOOTH -> {
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = false
+                        @Suppress("DEPRECATION")
+                        audioManager.startBluetoothSco()
+                        @Suppress("DEPRECATION")
+                        audioManager.isBluetoothScoOn = true
+                        Log.d(TAG, "Legacy Bluetooth SCO ON")
+                    }
+                    AUDIO_EARPIECE -> {
+                        @Suppress("DEPRECATION")
+                        audioManager.isSpeakerphoneOn = false
+                        @Suppress("DEPRECATION")
+                        if (audioManager.isBluetoothScoOn) {
+                            audioManager.stopBluetoothSco()
+                            audioManager.isBluetoothScoOn = false
+                        }
+                        Log.d(TAG, "Legacy Earpiece ON")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "executeDirectAudioRoute failed for $route", e)
+        }
+    }
+
+    /**
+     * Toggles Speakerphone state directly during a call and informs BlackBerry
      */
     fun toggleSpeakerphone(context: Context): Boolean {
-        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return false
-        val newState = !audioManager.isSpeakerphoneOn
-        audioManager.isSpeakerphoneOn = newState
-        return newState
+        val current = _audioRoute.value
+        val newRoute = if (current == AUDIO_SPEAKERPHONE) AUDIO_EARPIECE else AUDIO_SPEAKERPHONE
+        setAudioRoute(context, newRoute)
+        applyCallAudioRoute(context)
+
+        val isSpeakerOn = (newRoute == AUDIO_SPEAKERPHONE)
+        val status = if (isSpeakerOn) "ON" else "OFF"
+        BluetoothService.instance?.sendPacket(BSBPacket("SPEAKER_STATUS", listOf(status)))
+        BridgeStateManager.logEvent("Haut-parleur commuté: $status", EventType.INFO)
+        return isSpeakerOn
     }
 }

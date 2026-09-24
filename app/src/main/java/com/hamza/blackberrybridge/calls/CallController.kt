@@ -22,6 +22,15 @@ object CallController {
 
     @SuppressLint("MissingPermission")
     fun answerCall(context: Context, callId: String = "") {
+        // Try Telecom InCallService first if active
+        if (BridgeInCallService.activeCall != null) {
+            BridgeInCallService.answerCall()
+            SimManager.applyCallAudioRoute(context)
+            BridgeStateManager.logEvent("Appel décroché via InCallService", EventType.SUCCESS)
+            (context as? BluetoothService)?.sendPacket(BSBPacket("CALL_ANSWER_OK", listOf(callId)))
+            return
+        }
+
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
         if (telecomManager == null) {
             sendError(context, callId, "FAILED", "TELECOM_SERVICE_UNAVAILABLE")
@@ -54,6 +63,13 @@ object CallController {
 
     @SuppressLint("MissingPermission")
     fun rejectCall(context: Context, callId: String = "") {
+        if (BridgeInCallService.activeCall != null) {
+            BridgeInCallService.endCall()
+            BridgeStateManager.logEvent("Appel rejeté via InCallService", EventType.WARNING)
+            (context as? BluetoothService)?.sendPacket(BSBPacket("CALL_REJECT_OK", listOf(callId)))
+            return
+        }
+
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager
         if (telecomManager == null) {
             sendError(context, callId, "FAILED", "TELECOM_SERVICE_UNAVAILABLE")
@@ -81,6 +97,13 @@ object CallController {
 
     @SuppressLint("MissingPermission")
     fun endCall(context: Context) {
+        if (BridgeInCallService.activeCall != null) {
+            BridgeInCallService.endCall()
+            BridgeStateManager.logEvent("Appel raccroché via InCallService", EventType.INFO)
+            (context as? BluetoothService)?.sendPacket(BSBPacket("CALL_END", listOf("LOCAL")))
+            return
+        }
+
         val telecomManager = context.getSystemService(Context.TELECOM_SERVICE) as? TelecomManager ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED) {

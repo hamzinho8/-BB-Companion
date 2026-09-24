@@ -1,5 +1,7 @@
 package com.hamza.blackberrybridge.ui
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,8 +36,10 @@ fun DualSimCallCard(
     val availableSims by SimManager.availableSims.collectAsState()
     val preferredSlot by SimManager.preferredSlot.collectAsState()
     val audioRoute by SimManager.audioRoute.collectAsState()
+    val isBtAudioConnected by SimManager.isBluetoothAudioConnected.collectAsState()
+    val btDeviceName by SimManager.connectedAudioDeviceName.collectAsState()
 
-    var showSimOptions by remember { mutableStateOf(false) }
+    var testSpeakerFeedback by remember { mutableStateOf<String?>(null) }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -89,10 +93,13 @@ fun DualSimCallCard(
                     }
                 }
 
-                IconButton(onClick = { SimManager.refreshSims(context) }) {
+                IconButton(onClick = {
+                    SimManager.refreshSims(context)
+                    SimManager.checkBluetoothAudioDevices(context)
+                }) {
                     Icon(
                         imageVector = Icons.Default.Refresh,
-                        contentDescription = "Actualiser SIM",
+                        contentDescription = "Actualiser SIM & Audio",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -149,7 +156,7 @@ fun DualSimCallCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // Audio routing choice
             Text(
@@ -167,7 +174,10 @@ fun DualSimCallCard(
                 // Option 1: Speakerphone (recommended)
                 FilterChip(
                     selected = audioRoute == SimManager.AUDIO_SPEAKERPHONE,
-                    onClick = { SimManager.setAudioRoute(context, SimManager.AUDIO_SPEAKERPHONE) },
+                    onClick = {
+                        SimManager.setAudioRoute(context, SimManager.AUDIO_SPEAKERPHONE)
+                        SimManager.applyCallAudioRoute(context)
+                    },
                     label = { Text("📢 Haut-parleur", fontSize = 12.sp) },
                     leadingIcon = if (audioRoute == SimManager.AUDIO_SPEAKERPHONE) {
                         { Icon(Icons.Default.VolumeUp, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -178,7 +188,11 @@ fun DualSimCallCard(
                 // Option 2: Bluetooth SCO
                 FilterChip(
                     selected = audioRoute == SimManager.AUDIO_BLUETOOTH,
-                    onClick = { SimManager.setAudioRoute(context, SimManager.AUDIO_BLUETOOTH) },
+                    onClick = {
+                        SimManager.setAudioRoute(context, SimManager.AUDIO_BLUETOOTH)
+                        SimManager.checkBluetoothAudioDevices(context)
+                        SimManager.applyCallAudioRoute(context)
+                    },
                     label = { Text("🎧 Bluetooth", fontSize = 12.sp) },
                     leadingIcon = if (audioRoute == SimManager.AUDIO_BLUETOOTH) {
                         { Icon(Icons.Default.BluetoothAudio, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -189,7 +203,10 @@ fun DualSimCallCard(
                 // Option 3: Phone Earpiece
                 FilterChip(
                     selected = audioRoute == SimManager.AUDIO_EARPIECE,
-                    onClick = { SimManager.setAudioRoute(context, SimManager.AUDIO_EARPIECE) },
+                    onClick = {
+                        SimManager.setAudioRoute(context, SimManager.AUDIO_EARPIECE)
+                        SimManager.applyCallAudioRoute(context)
+                    },
                     label = { Text("📱 Écouteur", fontSize = 12.sp) },
                     leadingIcon = if (audioRoute == SimManager.AUDIO_EARPIECE) {
                         { Icon(Icons.Default.PhoneInTalk, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -198,16 +215,103 @@ fun DualSimCallCard(
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = when (audioRoute) {
-                    SimManager.AUDIO_SPEAKERPHONE -> "Le haut-parleur s'active automatiquement pour parler et écouter mains-libres lors des appels BlackBerry."
-                    SimManager.AUDIO_BLUETOOTH -> "Tente de router l'audio du microphone et de l'écouteur vers l'appareil Bluetooth connecté (HFP/SCO)."
-                    else -> "L'audio passe par l'écouteur standard du smartphone Android."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dynamic route details card
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                    Text(
+                        text = when (audioRoute) {
+                            SimManager.AUDIO_SPEAKERPHONE -> "📢 Haut-parleur Mains-libres renforcé : s'enclenche avec impulsions matérielles automatiques dès le lancement ou le décrochage de l'appel pour parler et écouter sans toucher le smartphone."
+                            SimManager.AUDIO_BLUETOOTH -> "🎧 Canal Audio Bluetooth SCO : dirige le son des appels vers l'appareil audio Bluetooth appairé (BlackBerry avec profil HFP ou oreillette/AirPods)."
+                            else -> "📱 Écouteur standard du smartphone Android."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    if (audioRoute == SimManager.AUDIO_BLUETOOTH) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        if (isBtAudioConnected) {
+                            Text(
+                                text = "✅ Périphérique audio détecté : ${btDeviceName ?: "Audio Bluetooth actif"}",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFF2E7D32)
+                            )
+                        } else {
+                            Text(
+                                text = "ℹ️ Aucun canal audio d'appel Bluetooth actif. Pour parler via le BlackBerry, vérifiez dans Paramètres Bluetooth Android > BlackBerry > activez « Audio des appels ».",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Direct Test & Action Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        val isOn = SimManager.toggleSpeakerphone(context)
+                        testSpeakerFeedback = if (isOn) "Haut-parleur activé !" else "Haut-parleur désactivé"
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VolumeUp,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (audioRoute == SimManager.AUDIO_SPEAKERPHONE) "Tester / Couper HP" else "Activer Haut-parleur",
+                        fontSize = 12.sp
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            // ignore
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SettingsBluetooth,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Bluetooth Android", fontSize = 12.sp)
+                }
+            }
+
+            testSpeakerFeedback?.let { msg ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = msg,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
         }
     }
 }

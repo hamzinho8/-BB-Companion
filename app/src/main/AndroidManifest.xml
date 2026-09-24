@@ -47,6 +47,18 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name="com.hamza.blackberrybridge.calls.BridgeInCallService"
+            android:permission="android.permission.BIND_INCALL_SERVICE"
+            android:exported="true">
+            <meta-data
+                android:name="android.telecom.IN_CALL_SERVICE_UI"
+                android:value="false" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name="com.hamza.blackberrybridge.calls.CallStateReceiver"
             android:exported="true">
