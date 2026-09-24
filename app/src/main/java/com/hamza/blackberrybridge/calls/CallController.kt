@@ -97,6 +97,7 @@ object CallController {
 
     @SuppressLint("MissingPermission")
     fun endCall(context: Context) {
+        com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
         if (BridgeInCallService.activeCall != null) {
             BridgeInCallService.endCall()
             BridgeStateManager.logEvent("Appel raccroché via InCallService", EventType.INFO)

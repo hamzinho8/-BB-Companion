@@ -83,6 +83,19 @@ object CommandDispatcher {
                     service.sendPacket(BSBPacket("AUDIO_ROUTE_OK", listOf(requestedRoute)))
                 }
             }
+            "VOICE_RX" -> {
+                if (packet.args.isNotEmpty()) {
+                    com.hamza.blackberrybridge.audio.CallAudioBridge.playIncomingVoice(packet.args[0])
+                }
+            }
+            "VOICE_BRIDGE_START" -> {
+                com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(service)
+                service.sendPacket(BSBPacket("VOICE_BRIDGE_STATUS", listOf("ACTIVE")))
+            }
+            "VOICE_BRIDGE_STOP" -> {
+                com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
+                service.sendPacket(BSBPacket("VOICE_BRIDGE_STATUS", listOf("STOPPED")))
+            }
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS" -> {
                 MediaSessionController.dispatchMediaCommand(service, packet.command)
                 BridgeStateManager.logEvent("Contrôle Média: ${packet.command}", com.hamza.blackberrybridge.state.EventType.INFO)

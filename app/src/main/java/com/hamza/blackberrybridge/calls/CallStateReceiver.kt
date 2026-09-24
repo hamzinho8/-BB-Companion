@@ -46,10 +46,14 @@ class CallStateReceiver : BroadcastReceiver() {
                         BridgeStateManager.logEvent("Appel en cours [$simName]", EventType.INFO)
                         // S'assurer que le routage audio (haut-parleur / Bluetooth) est bien enclenché dès le décrochage
                         SimManager.applyCallAudioRoute(ctx)
-                        BluetoothService.instance?.sendPacket(BSBPacket("CALL_ACTIVE", listOf(callId, simName)))
+                        BluetoothService.instance?.let { s ->
+                            com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(s)
+                            s.sendPacket(BSBPacket("CALL_ACTIVE", listOf(callId, simName)))
+                        }
                     }
                     TelephonyManager.EXTRA_STATE_IDLE -> {
                         BridgeStateManager.logEvent("Appel terminé", EventType.INFO)
+                        com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
                         BluetoothService.instance?.sendPacket(BSBPacket("CALL_END", listOf(callId)))
                     }
                 }
