@@ -16,14 +16,18 @@ object CommandParser {
         // Whitelist of allowed incoming commands from BlackBerry
         val allowedCommands = setOf(
             "PING", "PONG", "HELLO", "READY", 
-            "CALL_ANSWER", "CALL_REJECT",
+            "CALL_OUTBOUND", "CALL", "DIAL", 
+            "CALL_ANSWER", "CALL_REJECT", "CALL_END", "CALL_HANGUP",
+            "GET_SIMS", "SET_DEFAULT_SIM",
+            "SPEAKER_TOGGLE", "SPEAKER_ON", "SPEAKER_OFF", "AUDIO_ROUTE",
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS",
             "FIND_PHONE", "FIND_PHONE_STOP",
             "CLIPBOARD", "OPEN_APP", "APP_LIST_REQUEST",
             "REPLY", "VOICE_REPLY", "NOTIFICATION_ACTION",
-            "CONTACTS_REQUEST", "CONTACT_SEARCH",
+            "CONTACTS_REQUEST", "CONTACT_SEARCH", "SYNC_CONTACTS", "GET_CONTACTS", "GET_VIP",
+            "BATTERY", "GET_PHONE_BATTERY",
             "SYNC_REQUEST"
         )
-        return allowedCommands.contains(packet.command)
+        return allowedCommands.contains(packet.command.uppercase())
     }
 }

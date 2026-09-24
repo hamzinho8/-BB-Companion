@@ -17,7 +17,9 @@ object CommandDispatcher {
         when (packet.command) {
             "PING" -> service.sendPacket(BSBPacket("PONG", emptyList()))
             "HELLO", "READY" -> {
-                // Handshake ready, can trigger initial sync
+                // Handshake ready, sync SIM information and telemetry
+                CallController.sendSimListToBlackBerry(service)
+                service.telemetryManager?.sendImmediateTelemetry()
             }
             "BATTERY" -> {
                 if (packet.args.isNotEmpty()) {
@@ -30,17 +32,54 @@ object CommandDispatcher {
                 service.sendPacket(BSBPacket("PHONE_BATTERY", listOf(batteryPct.toString())))
             }
             "CALL_ANSWER" -> {
-                if (packet.args.isNotEmpty()) CallController.answerCall(service, packet.args[0])
-                    BridgeStateManager.logEvent("Appel répondu", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                val callId = if (packet.args.isNotEmpty()) packet.args[0] else ""
+                CallController.answerCall(service, callId)
             }
             "CALL_REJECT" -> {
-                if (packet.args.isNotEmpty()) CallController.rejectCall(service, packet.args[0])
-                    BridgeStateManager.logEvent("Appel rejeté", com.hamza.blackberrybridge.state.EventType.WARNING)
+                val callId = if (packet.args.isNotEmpty()) packet.args[0] else ""
+                CallController.rejectCall(service, callId)
             }
-            "CALL_OUTBOUND" -> {
+            "CALL_END", "CALL_HANGUP" -> {
+                CallController.endCall(service)
+            }
+            "CALL_OUTBOUND", "CALL", "DIAL" -> {
                 if (packet.args.isNotEmpty()) {
-                    CallController.makeCall(service, packet.args[0])
-                    BridgeStateManager.logEvent("Appel sortant: ${packet.args[0]}", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                    val number = packet.args[0]
+                    val requestedSlot = if (packet.args.size > 1) packet.args[1].toIntOrNull() else null
+                    CallController.makeCall(service, number, requestedSlot)
+                }
+            }
+            "GET_SIMS" -> {
+                CallController.sendSimListToBlackBerry(service)
+            }
+            "SET_DEFAULT_SIM" -> {
+                if (packet.args.isNotEmpty()) {
+                    packet.args[0].toIntOrNull()?.let { slot ->
+                        com.hamza.blackberrybridge.telephony.SimManager.setPreferredSlot(service, slot)
+                        service.sendPacket(BSBPacket("DEFAULT_SIM_SET", listOf(slot.toString())))
+                    }
+                }
+            }
+            "SPEAKER_TOGGLE" -> {
+                val newState = com.hamza.blackberrybridge.telephony.SimManager.toggleSpeakerphone(service)
+                service.sendPacket(BSBPacket("SPEAKER_STATUS", listOf(if (newState) "ON" else "OFF")))
+                BridgeStateManager.logEvent("Haut-parleur: ${if (newState) "ON" else "OFF"}", com.hamza.blackberrybridge.state.EventType.INFO)
+            }
+            "SPEAKER_ON" -> {
+                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.mode = android.media.AudioManager.MODE_IN_CALL
+                audioManager?.isSpeakerphoneOn = true
+                service.sendPacket(BSBPacket("SPEAKER_STATUS", listOf("ON")))
+            }
+            "SPEAKER_OFF" -> {
+                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.isSpeakerphoneOn = false
+                service.sendPacket(BSBPacket("SPEAKER_STATUS", listOf("OFF")))
+            }
+            "AUDIO_ROUTE" -> {
+                if (packet.args.isNotEmpty()) {
+                    com.hamza.blackberrybridge.telephony.SimManager.setAudioRoute(service, packet.args[0])
+                    com.hamza.blackberrybridge.telephony.SimManager.applyCallAudioRoute(service)
                 }
             }
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS" -> {

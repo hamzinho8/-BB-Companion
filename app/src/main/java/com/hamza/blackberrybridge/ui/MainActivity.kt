@@ -89,6 +89,9 @@ class MainActivity : ComponentActivity() {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
         permissions.add(Manifest.permission.READ_PHONE_STATE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            permissions.add(Manifest.permission.READ_PHONE_NUMBERS)
+        }
         permissions.add(Manifest.permission.ANSWER_PHONE_CALLS)
         permissions.add(Manifest.permission.CALL_PHONE)
         permissions.add(Manifest.permission.READ_CONTACTS)
@@ -526,6 +529,9 @@ fun StatusContent(context: android.content.Context) {
                     }
                 }
             }
+
+            // Dual SIM & Call Audio Card
+            DualSimCallCard()
 
             // VIP Contacts Selective Sync Card
             VipContactsCard(
