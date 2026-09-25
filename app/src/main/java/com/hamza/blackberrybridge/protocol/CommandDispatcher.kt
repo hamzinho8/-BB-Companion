@@ -85,7 +85,7 @@ object CommandDispatcher {
             }
             "VOICE_RX" -> {
                 if (packet.args.isNotEmpty()) {
-                    com.hamza.blackberrybridge.audio.CallAudioBridge.playIncomingVoice(packet.args[0])
+                    com.hamza.blackberrybridge.audio.CallAudioBridge.playIncomingVoice(service, packet.args[0])
                 }
             }
             "VOICE_BRIDGE_START" -> {

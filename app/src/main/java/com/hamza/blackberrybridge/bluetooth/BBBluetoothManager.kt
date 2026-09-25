@@ -155,11 +155,13 @@ class BBBluetoothManager(private val context: Context) {
                     delay(1500)
                 }
             }
-            
             while (currentCoroutineContext().isActive && socket.isConnected) {
                 val line = reader.readLine() ?: break
-                Log.d(TAG, "Received: $line")
-                BridgeStateManager.logEvent(line.trim(), com.hamza.blackberrybridge.state.EventType.RX)
+                val isVoice = line.startsWith("VOICE_RX") || line.startsWith("VOICE_TX")
+                if (!isVoice) {
+                    Log.d(TAG, "Received: $line")
+                    BridgeStateManager.logEvent(line.trim(), com.hamza.blackberrybridge.state.EventType.RX)
+                }
                 
                 val packet = CommandParser.parse(line)
                 if (packet != null) {
@@ -197,8 +199,11 @@ class BBBluetoothManager(private val context: Context) {
             try {
                 outWriter?.print(message)
                 outWriter?.flush()
-                Log.d(TAG, "Sent: $message")
-                BridgeStateManager.logEvent(message.trim(), com.hamza.blackberrybridge.state.EventType.TX)
+                val isVoice = message.startsWith("VOICE_TX") || message.startsWith("VOICE_RX")
+                if (!isVoice) {
+                    Log.d(TAG, "Sent: $message")
+                    BridgeStateManager.logEvent(message.trim(), com.hamza.blackberrybridge.state.EventType.TX)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending message", e)
             }

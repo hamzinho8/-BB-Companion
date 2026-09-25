@@ -38,18 +38,26 @@ object CallAudioBridge {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
 
     fun startStreaming(service: BluetoothService) {
+        initAudioTrack(service)
+
         if (isStreaming.get()) return
 
         if (ContextCompat.checkSelfPermission(service, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "RECORD_AUDIO permission not granted, skipping VoIP stream")
+            Log.w(TAG, "RECORD_AUDIO permission not granted, microphone transmission disabled, but playback remains active.")
+            BridgeStateManager.logEvent("Microphone Android non autorisé - playback actif", EventType.WARNING)
             return
         }
 
         isStreaming.set(true)
         Log.d(TAG, "Starting CallAudioBridge VoIP streaming with BlackBerry...")
-        BridgeStateManager.logEvent("Passerelle Voix IP BlackBerry démarrée", EventType.INFO)
+        BridgeStateManager.logEvent("Passerelle Voix IP BlackBerry active", EventType.INFO)
 
-        initAudioTrack(service)
+        val audioManager = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        try {
+            audioManager?.isMicrophoneMute = false
+        } catch (e: Exception) {
+            // ignore
+        }
 
         recordJob = scope.launch {
             var audioRecord: AudioRecord? = null
@@ -57,7 +65,7 @@ object CallAudioBridge {
                 val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_IN, ENCODING)
                 val bufferSize = maxOf(minBuf, CHUNK_SIZE * 4)
 
-                // Try VOICE_COMMUNICATION first for AEC (acoustic echo cancellation)
+                // 1. Try VOICE_COMMUNICATION for hardware echo cancellation
                 audioRecord = try {
                     AudioRecord(
                         MediaRecorder.AudioSource.VOICE_COMMUNICATION,
@@ -70,10 +78,27 @@ object CallAudioBridge {
                     null
                 }
 
+                // 2. Fallback to standard MIC
+                if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+                    audioRecord?.release()
+                    audioRecord = try {
+                        AudioRecord(
+                            MediaRecorder.AudioSource.MIC,
+                            SAMPLE_RATE,
+                            CHANNEL_IN,
+                            ENCODING,
+                            bufferSize
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                // 3. Fallback to DEFAULT
                 if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
                     audioRecord?.release()
                     audioRecord = AudioRecord(
-                        MediaRecorder.AudioSource.MIC,
+                        MediaRecorder.AudioSource.DEFAULT,
                         SAMPLE_RATE,
                         CHANNEL_IN,
                         ENCODING,
@@ -91,10 +116,10 @@ object CallAudioBridge {
                             val b64 = Base64.encodeToString(pcmBuffer, 0, read, Base64.NO_WRAP)
                             service.sendPacket(BSBPacket("VOICE_TX", listOf(b64)))
                         }
-                        delay(25) // ~40 packets per second (smooth voice transmission)
+                        delay(25) // ~40 packets per second
                     }
                 } else {
-                    Log.e(TAG, "AudioRecord could not be initialized")
+                    Log.e(TAG, "AudioRecord could not be initialized with any audio source")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during audio streaming recording loop", e)
@@ -124,9 +149,14 @@ object CallAudioBridge {
         BridgeStateManager.logEvent("Passerelle Voix IP BlackBerry arrêtée", EventType.INFO)
     }
 
-    fun playIncomingVoice(base64Data: String) {
-        if (!isStreaming.get()) return
+    /**
+     * Plays voice packets received from BlackBerry microphone directly through Android voice communication stream
+     */
+    fun playIncomingVoice(context: Context, base64Data: String) {
         try {
+            if (audioTrack == null || audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
+                initAudioTrack(context)
+            }
             val pcmBytes = Base64.decode(base64Data, Base64.NO_WRAP)
             audioTrack?.write(pcmBytes, 0, pcmBytes.size)
         } catch (e: Exception) {
@@ -134,7 +164,9 @@ object CallAudioBridge {
         }
     }
 
+    @Synchronized
     private fun initAudioTrack(context: Context) {
+        if (audioTrack != null && audioTrack?.state == AudioTrack.STATE_INITIALIZED) return
         try {
             val minBuf = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_OUT, ENCODING)
             val audioAttributes = AudioAttributes.Builder()
@@ -156,6 +188,17 @@ object CallAudioBridge {
                 .build()
 
             audioTrack?.play()
+
+            // Ensure voice call volume is audible
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            audioManager?.let { am ->
+                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
+                val curVol = am.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
+                if (curVol < maxVol / 2) {
+                    am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, (maxVol * 0.85).toInt(), 0)
+                }
+            }
+            Log.d(TAG, "AudioTrack initialized successfully for VoIP incoming playback")
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing AudioTrack", e)
         }

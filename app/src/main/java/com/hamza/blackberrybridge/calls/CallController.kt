@@ -26,6 +26,7 @@ object CallController {
         if (BridgeInCallService.activeCall != null) {
             BridgeInCallService.answerCall()
             SimManager.applyCallAudioRoute(context)
+            (context as? BluetoothService ?: BluetoothService.instance)?.let { com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(it) }
             BridgeStateManager.logEvent("Appel décroché via InCallService", EventType.SUCCESS)
             (context as? BluetoothService)?.sendPacket(BSBPacket("CALL_ANSWER_OK", listOf(callId)))
             return
@@ -46,6 +47,7 @@ object CallController {
                     
                     // Appliquer la configuration audio (Haut-parleur ou Bluetooth SCO)
                     SimManager.applyCallAudioRoute(context)
+                    (context as? BluetoothService ?: BluetoothService.instance)?.let { com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(it) }
                     
                     (context as? BluetoothService)?.sendPacket(BSBPacket("CALL_ANSWER_OK", listOf(callId)))
                 } catch (e: Exception) {
@@ -197,6 +199,7 @@ object CallController {
 
             // Activer la configuration audio (Haut-parleur mains-libres ou Bluetooth SCO)
             SimManager.applyCallAudioRoute(context)
+            service?.let { com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(it) }
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to make call", e)
