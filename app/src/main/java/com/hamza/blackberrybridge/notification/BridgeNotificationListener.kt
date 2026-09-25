@@ -22,6 +22,7 @@ class BridgeNotificationListener : NotificationListenerService() {
 
     private val activeNotifications = ConcurrentHashMap<String, StatusBarNotification>()
     private val replyActions = ConcurrentHashMap<String, Notification.Action>()
+    private val lastNotifTime = ConcurrentHashMap<String, Long>()
 
     override fun onCreate() {
         super.onCreate()
@@ -48,11 +49,23 @@ class BridgeNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName
         if (packageName == applicationContext.packageName) return
-        
+
+        // CRITICAL FIX: Filter out phone calls, dialers, telecom, and ongoing system notifications.
+        // Google Dialer and Samsung InCallUI update their notification every 100ms with call duration timer,
+        // which floods the Bluetooth link and causes BlackBerry OS process to crash (ANR / process terminated).
+        if (sbn.isOngoing ||
+            packageName.contains("dialer", ignoreCase = true) ||
+            packageName.contains("telecom", ignoreCase = true) ||
+            packageName.contains("incallui", ignoreCase = true) ||
+            packageName.contains("phone", ignoreCase = true) ||
+            packageName == "com.google.android.dialer" ||
+            packageName == "com.android.phone") {
+            return
+        }
+
         val dataStore = com.hamza.blackberrybridge.settings.SettingsDataStore(applicationContext)
         val allowNotif = runBlocking { dataStore.notificationForwardingFlow.first() }
         if (!allowNotif) return
-
 
         val id = sbn.key
         activeNotifications[id] = sbn
@@ -74,6 +87,14 @@ class BridgeNotificationListener : NotificationListenerService() {
         } catch (e: Exception) {
             packageName
         }
+
+        val notifKey = "$packageName:$title:$text"
+        val now = System.currentTimeMillis()
+        val prev = lastNotifTime[notifKey] ?: 0L
+        if (now - prev < 2500L) {
+            return // Skip rapid duplicate notification
+        }
+        lastNotifTime[notifKey] = now
 
         // NOTIFICATION|notif_id|app|sender|message
         com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Notification interceptée: $appName", com.hamza.blackberrybridge.state.EventType.INFO)

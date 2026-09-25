@@ -49,10 +49,25 @@ object CallAudioBridge {
     private val _rxPackets = MutableStateFlow(0)
     val rxPackets: StateFlow<Int> = _rxPackets.asStateFlow()
 
+    private val _isVoipEnabled = MutableStateFlow(false) // Default false = SmartWatch mode (handsfree on phone, zero echo, zero crash)
+    val isVoipEnabled: StateFlow<Boolean> = _isVoipEnabled.asStateFlow()
+
     private val _isBridgeActive = MutableStateFlow(false)
     val isBridgeActive: StateFlow<Boolean> = _isBridgeActive.asStateFlow()
 
+    fun setVoipEnabled(enabled: Boolean) {
+        _isVoipEnabled.value = enabled
+        if (!enabled && isStreaming.get()) {
+            stopStreaming()
+        }
+    }
+
     fun startStreaming(service: BluetoothService) {
+        if (!_isVoipEnabled.value) {
+            Log.d(TAG, "SmartWatch mode active: VoIP streaming disabled to prevent Bluetooth bandwidth saturation and echo.")
+            return
+        }
+
         initAudioTrack(service)
 
         if (isStreaming.get()) return
@@ -167,6 +182,7 @@ object CallAudioBridge {
      * Plays voice packets received from BlackBerry microphone directly through Android voice communication stream
      */
     fun playIncomingVoice(context: Context, base64Data: String) {
+        if (!_isVoipEnabled.value) return // Prevents echoing voice back on smartphone!
         try {
             if (audioTrack == null || audioTrack?.state != AudioTrack.STATE_INITIALIZED) {
                 initAudioTrack(context)

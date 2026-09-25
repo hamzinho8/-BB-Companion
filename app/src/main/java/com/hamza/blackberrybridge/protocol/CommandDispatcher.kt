@@ -83,6 +83,25 @@ object CommandDispatcher {
                     service.sendPacket(BSBPacket("AUDIO_ROUTE_OK", listOf(requestedRoute)))
                 }
             }
+            "MUTE_TOGGLE" -> {
+                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.let { am ->
+                    val isMuted = !am.isMicrophoneMute
+                    am.isMicrophoneMute = isMuted
+                    service.sendPacket(BSBPacket("MUTE_STATUS", listOf(if (isMuted) "MUTED" else "UNMUTED")))
+                    BridgeStateManager.logEvent("Microphone d'appel: ${if (isMuted) "Coupé" else "Actif"}", com.hamza.blackberrybridge.state.EventType.INFO)
+                }
+            }
+            "VOLUME_UP" -> {
+                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.adjustStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.ADJUST_RAISE, android.media.AudioManager.FLAG_SHOW_UI)
+                service.sendPacket(BSBPacket("VOLUME_OK", listOf("UP")))
+            }
+            "VOLUME_DOWN" -> {
+                val audioManager = service.getSystemService(android.content.Context.AUDIO_SERVICE) as? android.media.AudioManager
+                audioManager?.adjustStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, android.media.AudioManager.ADJUST_LOWER, android.media.AudioManager.FLAG_SHOW_UI)
+                service.sendPacket(BSBPacket("VOLUME_OK", listOf("DOWN")))
+            }
             "VOICE_RX" -> {
                 if (packet.args.isNotEmpty()) {
                     com.hamza.blackberrybridge.audio.CallAudioBridge.playIncomingVoice(service, packet.args[0])
