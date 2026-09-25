@@ -17,7 +17,11 @@ import com.hamza.blackberrybridge.protocol.BSBPacket
 import com.hamza.blackberrybridge.state.BridgeStateManager
 import com.hamza.blackberrybridge.state.EventType
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * High-performance VoIP audio streaming bridge over Bluetooth RFCOMM.
@@ -26,7 +30,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object CallAudioBridge {
     private const val TAG = "CallAudioBridge"
-    private const val SAMPLE_RATE = 8000
+    const val SAMPLE_RATE = 8000
+    const val CHANNELS = 1
+    const val BITS_PER_SAMPLE = 16
     private const val CHANNEL_IN = AudioFormat.CHANNEL_IN_MONO
     private const val CHANNEL_OUT = AudioFormat.CHANNEL_OUT_MONO
     private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
@@ -36,6 +42,15 @@ object CallAudioBridge {
     private var recordJob: Job? = null
     private var audioTrack: AudioTrack? = null
     private val scope = CoroutineScope(Dispatchers.IO + Job())
+
+    private val _txPackets = MutableStateFlow(0)
+    val txPackets: StateFlow<Int> = _txPackets.asStateFlow()
+
+    private val _rxPackets = MutableStateFlow(0)
+    val rxPackets: StateFlow<Int> = _rxPackets.asStateFlow()
+
+    private val _isBridgeActive = MutableStateFlow(false)
+    val isBridgeActive: StateFlow<Boolean> = _isBridgeActive.asStateFlow()
 
     fun startStreaming(service: BluetoothService) {
         initAudioTrack(service)
@@ -49,11 +64,19 @@ object CallAudioBridge {
         }
 
         isStreaming.set(true)
+        _isBridgeActive.value = true
+        _txPackets.value = 0
+        _rxPackets.value = 0
+
         Log.d(TAG, "Starting CallAudioBridge VoIP streaming with BlackBerry...")
-        BridgeStateManager.logEvent("Passerelle Voix IP BlackBerry active", EventType.INFO)
+        BridgeStateManager.logEvent("Passerelle Voix IP active (8000Hz PCM)", EventType.INFO)
+
+        // Notify BlackBerry that audio streaming is starting
+        service.sendPacket(BSBPacket("VOICE_START", listOf(SAMPLE_RATE.toString(), CHANNELS.toString(), BITS_PER_SAMPLE.toString())))
 
         val audioManager = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         try {
+            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager?.isMicrophoneMute = false
         } catch (e: Exception) {
             // ignore
@@ -65,58 +88,45 @@ object CallAudioBridge {
                 val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_IN, ENCODING)
                 val bufferSize = maxOf(minBuf, CHUNK_SIZE * 4)
 
-                // 1. Try VOICE_COMMUNICATION for hardware echo cancellation
-                audioRecord = try {
-                    AudioRecord(
-                        MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                        SAMPLE_RATE,
-                        CHANNEL_IN,
-                        ENCODING,
-                        bufferSize
-                    )
-                } catch (e: Exception) {
-                    null
-                }
+                // Try audio sources in order of resilience during in-call phone state
+                val sources = listOf(
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                    MediaRecorder.AudioSource.MIC,
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    MediaRecorder.AudioSource.DEFAULT
+                )
 
-                // 2. Fallback to standard MIC
-                if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-                    audioRecord?.release()
-                    audioRecord = try {
-                        AudioRecord(
-                            MediaRecorder.AudioSource.MIC,
-                            SAMPLE_RATE,
-                            CHANNEL_IN,
-                            ENCODING,
-                            bufferSize
-                        )
+                for (source in sources) {
+                    try {
+                        val ar = AudioRecord(source, SAMPLE_RATE, CHANNEL_IN, ENCODING, bufferSize)
+                        if (ar.state == AudioRecord.STATE_INITIALIZED) {
+                            audioRecord = ar
+                            Log.d(TAG, "AudioRecord initialized successfully with source: $source")
+                            break
+                        } else {
+                            ar.release()
+                        }
                     } catch (e: Exception) {
-                        null
+                        Log.w(TAG, "Failed to initialize AudioRecord with source $source: ${e.message}")
                     }
                 }
 
-                // 3. Fallback to DEFAULT
-                if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-                    audioRecord?.release()
-                    audioRecord = AudioRecord(
-                        MediaRecorder.AudioSource.DEFAULT,
-                        SAMPLE_RATE,
-                        CHANNEL_IN,
-                        ENCODING,
-                        bufferSize
-                    )
-                }
-
-                if (audioRecord.state == AudioRecord.STATE_INITIALIZED) {
+                if (audioRecord != null && audioRecord.state == AudioRecord.STATE_INITIALIZED) {
                     audioRecord.startRecording()
                     val pcmBuffer = ByteArray(CHUNK_SIZE)
+                    val txCounter = AtomicInteger(0)
 
                     while (isStreaming.get() && isActive) {
+                        // Blocking read: accurately self-paces at hardware audio sample rate (~20ms per CHUNK_SIZE)
                         val read = audioRecord.read(pcmBuffer, 0, pcmBuffer.size)
                         if (read > 0) {
                             val b64 = Base64.encodeToString(pcmBuffer, 0, read, Base64.NO_WRAP)
                             service.sendPacket(BSBPacket("VOICE_TX", listOf(b64)))
+                            val count = txCounter.incrementAndGet()
+                            if (count % 25 == 0) {
+                                _txPackets.value = count
+                            }
                         }
-                        delay(25) // ~40 packets per second
                     }
                 } else {
                     Log.e(TAG, "AudioRecord could not be initialized with any audio source")
@@ -136,6 +146,7 @@ object CallAudioBridge {
 
     fun stopStreaming() {
         if (!isStreaming.getAndSet(false)) return
+        _isBridgeActive.value = false
         Log.d(TAG, "Stopping CallAudioBridge VoIP stream...")
         recordJob?.cancel()
         recordJob = null
@@ -146,6 +157,9 @@ object CallAudioBridge {
         } catch (e: Exception) {
             // ignore
         }
+
+        // Notify BlackBerry that voice stream has finished
+        BluetoothService.instance?.sendPacket(BSBPacket("VOICE_STOP", emptyList()))
         BridgeStateManager.logEvent("Passerelle Voix IP BlackBerry arrêtée", EventType.INFO)
     }
 
@@ -159,6 +173,7 @@ object CallAudioBridge {
             }
             val pcmBytes = Base64.decode(base64Data, Base64.NO_WRAP)
             audioTrack?.write(pcmBytes, 0, pcmBytes.size)
+            _rxPackets.value = _rxPackets.value + 1
         } catch (e: Exception) {
             Log.e(TAG, "Error playing incoming voice from BlackBerry", e)
         }

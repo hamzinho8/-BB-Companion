@@ -38,6 +38,9 @@ fun DualSimCallCard(
     val audioRoute by SimManager.audioRoute.collectAsState()
     val isBtAudioConnected by SimManager.isBluetoothAudioConnected.collectAsState()
     val btDeviceName by SimManager.connectedAudioDeviceName.collectAsState()
+    val isBridgeActive by com.hamza.blackberrybridge.audio.CallAudioBridge.isBridgeActive.collectAsState()
+    val txPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.txPackets.collectAsState()
+    val rxPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.rxPackets.collectAsState()
 
     var testSpeakerFeedback by remember { mutableStateOf<String?>(null) }
 
@@ -249,6 +252,44 @@ fun DualSimCallCard(
                                 color = MaterialTheme.colorScheme.error
                             )
                         }
+                    }
+                }
+            }
+
+            // VoIP Live Status Badge
+            if (isBridgeActive || txPackets > 0 || rxPackets > 0) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Mic,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = if (isBridgeActive) "Voix IP BlackBerry : Connectée" else "Voix IP en attente",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                        Text(
+                            text = "📤 $txPackets TX | 📥 $rxPackets RX",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
             }
