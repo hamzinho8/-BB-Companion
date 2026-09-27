@@ -36,7 +36,7 @@ object CallAudioBridge {
     private const val CHANNEL_IN = AudioFormat.CHANNEL_IN_MONO
     private const val CHANNEL_OUT = AudioFormat.CHANNEL_OUT_MONO
     private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
-    private const val CHUNK_SIZE = 320 // 20ms of 8000Hz 16-bit Mono (160 samples * 2 bytes)
+    private const val CHUNK_SIZE = 640 // 40ms of 8000Hz 16-bit Mono (320 samples * 2 bytes = optimal for Bluetooth RFCOMM)
 
     private val isStreaming = AtomicBoolean(false)
     private var recordJob: Job? = null
@@ -49,7 +49,7 @@ object CallAudioBridge {
     private val _rxPackets = MutableStateFlow(0)
     val rxPackets: StateFlow<Int> = _rxPackets.asStateFlow()
 
-    private val _isVoipEnabled = MutableStateFlow(false) // Default false = SmartWatch mode (handsfree on phone, zero echo, zero crash)
+    private val _isVoipEnabled = MutableStateFlow(true) // Enabled: stream audio to BlackBerry
     val isVoipEnabled: StateFlow<Boolean> = _isVoipEnabled.asStateFlow()
 
     private val _isBridgeActive = MutableStateFlow(false)

@@ -39,6 +39,7 @@ fun DualSimCallCard(
     val isBtAudioConnected by SimManager.isBluetoothAudioConnected.collectAsState()
     val btDeviceName by SimManager.connectedAudioDeviceName.collectAsState()
     val isBridgeActive by com.hamza.blackberrybridge.audio.CallAudioBridge.isBridgeActive.collectAsState()
+    val isVoipEnabled by com.hamza.blackberrybridge.audio.CallAudioBridge.isVoipEnabled.collectAsState()
     val txPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.txPackets.collectAsState()
     val rxPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.rxPackets.collectAsState()
 
@@ -256,40 +257,59 @@ fun DualSimCallCard(
                 }
             }
 
-            // VoIP Live Status Badge
-            if (isBridgeActive || txPackets > 0 || rxPackets > 0) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                ) {
+            // VoIP Streaming Switch & Live Status Badge
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                color = if (isVoipEnabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+            ) {
+                Column(modifier = Modifier.padding(10.dp)) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Mic,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "🎧 Relais Audio Appels vers BlackBerry",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = if (isBridgeActive) "Voix IP BlackBerry : Connectée" else "Voix IP en attente",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                text = if (isVoipEnabled) 
+                                    "Actif : la voix de l'appel est transmise au combiné BlackBerry Curve 9300"
+                                else 
+                                    "Mode SmartWatch : diffusion directe sur haut-parleur smartphone",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text(
-                            text = "📤 $txPackets TX | 📥 $rxPackets RX",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.primary
+                        Switch(
+                            checked = isVoipEnabled,
+                            onCheckedChange = { checked ->
+                                com.hamza.blackberrybridge.audio.CallAudioBridge.setVoipEnabled(checked)
+                            }
                         )
+                    }
+
+                    if (isVoipEnabled && (isBridgeActive || txPackets > 0 || rxPackets > 0)) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = if (isBridgeActive) "● Flux en direct (8000Hz PCM)" else "En attente d'appel",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                color = if (isBridgeActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "📤 $txPackets TX | 📥 $rxPackets RX",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }
