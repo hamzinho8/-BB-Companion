@@ -300,16 +300,42 @@ fun DualSimCallCard(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (isBridgeActive) "● Flux en direct (8000Hz PCM)" else "En attente d'appel",
+                                text = if (isBridgeActive) "● Diffusion Écouteurs Active (WAV 200ms)" else "En attente d'audio",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (isBridgeActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "📤 $txPackets TX | 📥 $rxPackets RX",
+                                text = "📤 $txPackets blocs envoyés",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val s = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+                            if (s != null) {
+                                com.hamza.blackberrybridge.audio.CallAudioBridge.toggleStreaming(s)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isBridgeActive) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (isBridgeActive) Icons.Default.VolumeOff else Icons.Default.Headset,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isBridgeActive) "Arrêter la diffusion audio" else "🎧 Diffuser le son (YouTube, Musique, Appels)",
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }

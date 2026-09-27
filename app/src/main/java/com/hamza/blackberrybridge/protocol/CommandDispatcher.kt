@@ -107,13 +107,14 @@ object CommandDispatcher {
                     com.hamza.blackberrybridge.audio.CallAudioBridge.playIncomingVoice(service, packet.args[0])
                 }
             }
-            "VOICE_BRIDGE_START" -> {
+            "VOICE_BRIDGE_START", "AUDIO_PLAYBACK_START" -> {
+                com.hamza.blackberrybridge.audio.CallAudioBridge.setVoipEnabled(true)
                 com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(service)
-                service.sendPacket(BSBPacket("VOICE_BRIDGE_STATUS", listOf("ACTIVE")))
+                service.sendPacket(BSBPacket("AUDIO_STATUS", listOf("STREAMING_ACTIVE")))
             }
-            "VOICE_BRIDGE_STOP" -> {
+            "VOICE_BRIDGE_STOP", "AUDIO_PLAYBACK_STOP" -> {
                 com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
-                service.sendPacket(BSBPacket("VOICE_BRIDGE_STATUS", listOf("STOPPED")))
+                service.sendPacket(BSBPacket("AUDIO_STATUS", listOf("STREAMING_STOPPED")))
             }
             "MEDIA_PLAY", "MEDIA_PAUSE", "MEDIA_NEXT", "MEDIA_PREVIOUS" -> {
                 MediaSessionController.dispatchMediaCommand(service, packet.command)

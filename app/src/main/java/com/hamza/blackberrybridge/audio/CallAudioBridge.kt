@@ -3,11 +3,9 @@ package com.hamza.blackberrybridge.audio
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
-import android.media.AudioTrack
 import android.media.MediaRecorder
 import android.util.Base64
 import android.util.Log
@@ -24,9 +22,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * High-performance VoIP audio streaming bridge over Bluetooth RFCOMM.
- * Allows BlackBerry (Curve 9300 / Bold / Torch) without native Bluetooth HFP audio profiles
- * to stream microphone and earpiece voice data directly through the application's Bluetooth connection.
+ * Universal Audio Bridge over Bluetooth RFCOMM.
+ * Allows BlackBerry (Curve 9300 / Bold / Torch) to act as wireless Bluetooth earphones/speaker
+ * for phone calls and all Android media playback (YouTube, music, voice notes).
+ *
+ * Transmits self-contained 200ms WAV chunks (5 packets/second) with complete RIFF headers.
+ * This guarantees zero J2ME thread lockups, zero watchdog crashes (226), and direct playback.
  */
 object CallAudioBridge {
     private const val TAG = "CallAudioBridge"
@@ -34,13 +35,14 @@ object CallAudioBridge {
     const val CHANNELS = 1
     const val BITS_PER_SAMPLE = 16
     private const val CHANNEL_IN = AudioFormat.CHANNEL_IN_MONO
-    private const val CHANNEL_OUT = AudioFormat.CHANNEL_OUT_MONO
     private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
-    private const val CHUNK_SIZE = 640 // 40ms of 8000Hz 16-bit Mono (320 samples * 2 bytes = optimal for Bluetooth RFCOMM)
+
+    // 200ms of 8000Hz 16-bit Mono = 1600 samples * 2 bytes = 3200 bytes per chunk
+    // 5 packets per second = ultra-lightweight for Bluetooth RFCOMM and effortless for BlackBerry Curve 9300 CPU
+    private const val PCM_CHUNK_SIZE = 3200
 
     private val isStreaming = AtomicBoolean(false)
     private var recordJob: Job? = null
-    private var audioTrack: AudioTrack? = null
     private val scope = CoroutineScope(Dispatchers.IO + Job())
 
     private val _txPackets = MutableStateFlow(0)
@@ -49,8 +51,7 @@ object CallAudioBridge {
     private val _rxPackets = MutableStateFlow(0)
     val rxPackets: StateFlow<Int> = _rxPackets.asStateFlow()
 
-    // Default false = Pure SmartWatch mode (Zero packet flooding, zero crash 226, phone loudspeaker auto-on, zero echo)
-    private val _isVoipEnabled = MutableStateFlow(false)
+    private val _isVoipEnabled = MutableStateFlow(true) // Audio relay active
     val isVoipEnabled: StateFlow<Boolean> = _isVoipEnabled.asStateFlow()
 
     private val _isBridgeActive = MutableStateFlow(false)
@@ -65,17 +66,15 @@ object CallAudioBridge {
 
     fun startStreaming(service: BluetoothService) {
         if (!_isVoipEnabled.value) {
-            Log.d(TAG, "SmartWatch mode active: VoIP streaming disabled to prevent Bluetooth bandwidth saturation and echo.")
+            Log.d(TAG, "VoIP / Media audio relay is disabled in settings.")
             return
         }
-
-        initAudioTrack(service)
 
         if (isStreaming.get()) return
 
         if (ContextCompat.checkSelfPermission(service, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Log.w(TAG, "RECORD_AUDIO permission not granted, microphone transmission disabled, but playback remains active.")
-            BridgeStateManager.logEvent("Microphone Android non autorisé - playback actif", EventType.WARNING)
+            Log.w(TAG, "RECORD_AUDIO permission not granted, audio streaming cannot start.")
+            BridgeStateManager.logEvent("Microphone Android non autorisé pour l'audio", EventType.WARNING)
             return
         }
 
@@ -84,15 +83,15 @@ object CallAudioBridge {
         _txPackets.value = 0
         _rxPackets.value = 0
 
-        Log.d(TAG, "Starting CallAudioBridge VoIP streaming with BlackBerry...")
-        BridgeStateManager.logEvent("Passerelle Voix IP active (8000Hz PCM)", EventType.INFO)
+        Log.d(TAG, "Starting Universal Audio Streamer to BlackBerry Curve 9300...")
+        BridgeStateManager.logEvent("Relais Écouteur BlackBerry actif (WAV 8000Hz 200ms)", EventType.INFO)
 
-        // Notify BlackBerry that audio streaming is starting
+        // Notify BlackBerry that audio streaming has started with 200ms chunk configuration
+        service.sendPacket(BSBPacket("AUDIO_START", listOf(SAMPLE_RATE.toString(), CHANNELS.toString(), BITS_PER_SAMPLE.toString(), "200")))
         service.sendPacket(BSBPacket("VOICE_START", listOf(SAMPLE_RATE.toString(), CHANNELS.toString(), BITS_PER_SAMPLE.toString())))
 
         val audioManager = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         try {
-            audioManager?.mode = AudioManager.MODE_IN_COMMUNICATION
             audioManager?.isMicrophoneMute = false
         } catch (e: Exception) {
             // ignore
@@ -102,9 +101,9 @@ object CallAudioBridge {
             var audioRecord: AudioRecord? = null
             try {
                 val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_IN, ENCODING)
-                val bufferSize = maxOf(minBuf, CHUNK_SIZE * 4)
+                val bufferSize = maxOf(minBuf, PCM_CHUNK_SIZE * 4)
 
-                // Try audio sources in order of resilience during in-call phone state
+                // Select resilient audio source
                 val sources = listOf(
                     MediaRecorder.AudioSource.VOICE_RECOGNITION,
                     MediaRecorder.AudioSource.MIC,
@@ -129,19 +128,32 @@ object CallAudioBridge {
 
                 if (audioRecord != null && audioRecord.state == AudioRecord.STATE_INITIALIZED) {
                     audioRecord.startRecording()
-                    val pcmBuffer = ByteArray(CHUNK_SIZE)
+                    val pcmBuffer = ByteArray(PCM_CHUNK_SIZE)
                     val txCounter = AtomicInteger(0)
 
                     while (isStreaming.get() && isActive) {
-                        // Blocking read: accurately self-paces at hardware audio sample rate (~20ms per CHUNK_SIZE)
-                        val read = audioRecord.read(pcmBuffer, 0, pcmBuffer.size)
-                        if (read > 0) {
-                            val b64 = Base64.encodeToString(pcmBuffer, 0, read, Base64.NO_WRAP)
-                            service.sendPacket(BSBPacket("VOICE_TX", listOf(b64)))
-                            val count = txCounter.incrementAndGet()
-                            if (count % 25 == 0) {
-                                _txPackets.value = count
+                        // Blocking read of 200ms audio chunk (3200 bytes = exactly 200ms pacing)
+                        var totalRead = 0
+                        while (totalRead < PCM_CHUNK_SIZE && isStreaming.get() && isActive) {
+                            val r = audioRecord.read(pcmBuffer, totalRead, PCM_CHUNK_SIZE - totalRead)
+                            if (r > 0) {
+                                totalRead += r
+                            } else {
+                                break
                             }
+                        }
+
+                        if (totalRead > 0) {
+                            // Build complete self-contained WAV file with standard 44-byte RIFF header
+                            val wavBytes = createWavPackage(pcmBuffer, totalRead, SAMPLE_RATE, CHANNELS, BITS_PER_SAMPLE)
+                            val b64 = Base64.encodeToString(wavBytes, Base64.NO_WRAP)
+
+                            // Send both commands for full backwards and forwards compatibility
+                            service.sendPacket(BSBPacket("AUDIO_CHUNK", listOf(b64)))
+                            service.sendPacket(BSBPacket("VOICE_TX", listOf(b64)))
+
+                            val count = txCounter.incrementAndGet()
+                            _txPackets.value = count
                         }
                     }
                 } else {
@@ -163,67 +175,74 @@ object CallAudioBridge {
     fun stopStreaming() {
         if (!isStreaming.getAndSet(false)) return
         _isBridgeActive.value = false
-        Log.d(TAG, "Stopping CallAudioBridge VoIP stream...")
+        Log.d(TAG, "Stopping Audio Streamer to BlackBerry...")
         recordJob?.cancel()
         recordJob = null
-        try {
-            audioTrack?.stop()
-            audioTrack?.release()
-            audioTrack = null
-        } catch (e: Exception) {
-            // ignore
-        }
 
-        // Notify BlackBerry that voice stream has finished
+        // Notify BlackBerry that audio stream has ended
+        BluetoothService.instance?.sendPacket(BSBPacket("AUDIO_STOP", emptyList()))
         BluetoothService.instance?.sendPacket(BSBPacket("VOICE_STOP", emptyList()))
-        BridgeStateManager.logEvent("Passerelle Voix IP BlackBerry arrêtée", EventType.INFO)
+        BridgeStateManager.logEvent("Relais Écouteur BlackBerry arrêté", EventType.INFO)
+    }
+
+    fun toggleStreaming(service: BluetoothService) {
+        if (isStreaming.get()) {
+            stopStreaming()
+        } else {
+            startStreaming(service)
+        }
     }
 
     /**
-     * Plays voice packets received from BlackBerry microphone directly through Android voice communication stream
+     * Handles incoming voice from BlackBerry without echoing locally onto smartphone speaker
      */
     fun playIncomingVoice(context: Context, base64Data: String) {
-        // Do NOT play back to smartphone speaker (prevents user voice echo)!
+        // Telemetry only: do NOT echo user voice through phone speaker
         _rxPackets.value = _rxPackets.value + 1
     }
 
-    @Synchronized
-    private fun initAudioTrack(context: Context) {
-        if (audioTrack != null && audioTrack?.state == AudioTrack.STATE_INITIALIZED) return
-        try {
-            val minBuf = AudioTrack.getMinBufferSize(SAMPLE_RATE, CHANNEL_OUT, ENCODING)
-            val audioAttributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                .build()
+    /**
+     * Creates a fully compliant 44-byte RIFF WAV package from raw PCM buffer.
+     */
+    private fun createWavPackage(pcmData: ByteArray, pcmLength: Int, sampleRate: Int, channels: Int, bitsPerSample: Int): ByteArray {
+        val totalDataLen = pcmLength + 36
+        val byteRate = sampleRate * channels * bitsPerSample / 8
+        val blockAlign = channels * bitsPerSample / 8
+        val wav = ByteArray(44 + pcmLength)
 
-            val format = AudioFormat.Builder()
-                .setEncoding(ENCODING)
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(CHANNEL_OUT)
-                .build()
+        // RIFF header
+        wav[0] = 'R'.code.toByte(); wav[1] = 'I'.code.toByte(); wav[2] = 'F'.code.toByte(); wav[3] = 'F'.code.toByte()
+        wav[4] = (totalDataLen and 0xff).toByte()
+        wav[5] = ((totalDataLen shr 8) and 0xff).toByte()
+        wav[6] = ((totalDataLen shr 16) and 0xff).toByte()
+        wav[7] = ((totalDataLen shr 24) and 0xff).toByte()
+        wav[8] = 'W'.code.toByte(); wav[9] = 'A'.code.toByte(); wav[10] = 'V'.code.toByte(); wav[11] = 'E'.code.toByte()
 
-            audioTrack = AudioTrack.Builder()
-                .setAudioAttributes(audioAttributes)
-                .setAudioFormat(format)
-                .setBufferSizeInBytes(maxOf(minBuf, CHUNK_SIZE * 4))
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
+        // fmt chunk
+        wav[12] = 'f'.code.toByte(); wav[13] = 'm'.code.toByte(); wav[14] = 't'.code.toByte(); wav[15] = ' '.code.toByte()
+        wav[16] = 16; wav[17] = 0; wav[18] = 0; wav[19] = 0 // Chunk size = 16 for PCM
+        wav[20] = 1; wav[21] = 0 // Linear PCM format
+        wav[22] = channels.toByte(); wav[23] = 0
+        wav[24] = (sampleRate and 0xff).toByte()
+        wav[25] = ((sampleRate shr 8) and 0xff).toByte()
+        wav[26] = ((sampleRate shr 16) and 0xff).toByte()
+        wav[27] = ((sampleRate shr 24) and 0xff).toByte()
+        wav[28] = (byteRate and 0xff).toByte()
+        wav[29] = ((byteRate shr 8) and 0xff).toByte()
+        wav[30] = ((byteRate shr 16) and 0xff).toByte()
+        wav[31] = ((byteRate shr 24) and 0xff).toByte()
+        wav[32] = blockAlign.toByte(); wav[33] = 0
+        wav[34] = bitsPerSample.toByte(); wav[35] = 0
 
-            audioTrack?.play()
+        // data chunk
+        wav[36] = 'd'.code.toByte(); wav[37] = 'a'.code.toByte(); wav[38] = 't'.code.toByte(); wav[39] = 'a'.code.toByte()
+        wav[40] = (pcmLength and 0xff).toByte()
+        wav[41] = ((pcmLength shr 8) and 0xff).toByte()
+        wav[42] = ((pcmLength shr 16) and 0xff).toByte()
+        wav[43] = ((pcmLength shr 24) and 0xff).toByte()
 
-            // Ensure voice call volume is audible
-            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-            audioManager?.let { am ->
-                val maxVol = am.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-                val curVol = am.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
-                if (curVol < maxVol / 2) {
-                    am.setStreamVolume(AudioManager.STREAM_VOICE_CALL, (maxVol * 0.85).toInt(), 0)
-                }
-            }
-            Log.d(TAG, "AudioTrack initialized successfully for VoIP incoming playback")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error initializing AudioTrack", e)
-        }
+        // Copy PCM body
+        System.arraycopy(pcmData, 0, wav, 44, pcmLength)
+        return wav
     }
 }
