@@ -157,7 +157,7 @@ class BBBluetoothManager(private val context: Context) {
             }
             while (currentCoroutineContext().isActive && socket.isConnected) {
                 val line = reader.readLine() ?: break
-                val isVoice = line.startsWith("VOICE_RX") || line.startsWith("VOICE_TX")
+                val isVoice = line.startsWith("VOICE_RX") || line.startsWith("VOICE_TX") || line.startsWith("AUDIO_CHUNK")
                 if (!isVoice) {
                     Log.d(TAG, "Received: $line")
                     BridgeStateManager.logEvent(line.trim(), com.hamza.blackberrybridge.state.EventType.RX)
@@ -177,9 +177,12 @@ class BBBluetoothManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Connection lost", e)
         } finally {
-            socket.close()
+            try {
+                socket.close()
+            } catch (e: Exception) {}
             activeSocket = null
             outWriter = null
+            com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
             val wasIntentional = isIntentionalDisconnect
             withContext(Dispatchers.Main) {
                 service.updateNotification("○ BlackBerry déconnecté")
@@ -199,7 +202,7 @@ class BBBluetoothManager(private val context: Context) {
             try {
                 outWriter?.print(message)
                 outWriter?.flush()
-                val isVoice = message.startsWith("VOICE_TX") || message.startsWith("VOICE_RX")
+                val isVoice = message.startsWith("VOICE_TX") || message.startsWith("VOICE_RX") || message.startsWith("AUDIO_CHUNK")
                 if (!isVoice) {
                     Log.d(TAG, "Sent: $message")
                     BridgeStateManager.logEvent(message.trim(), com.hamza.blackberrybridge.state.EventType.TX)
@@ -231,6 +234,7 @@ class BBBluetoothManager(private val context: Context) {
         isIntentionalDisconnect = true
         connectionJob?.cancel()
         reconnectJob?.cancel()
+        com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
         try {
             activeSocket?.close()
         } catch (e: IOException) {

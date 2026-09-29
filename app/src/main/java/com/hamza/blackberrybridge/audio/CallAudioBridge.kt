@@ -37,9 +37,9 @@ object CallAudioBridge {
     private const val CHANNEL_IN = AudioFormat.CHANNEL_IN_MONO
     private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
 
-    // 200ms of 8000Hz 16-bit Mono = 1600 samples * 2 bytes = 3200 bytes per chunk
-    // 5 packets per second = ultra-lightweight for Bluetooth RFCOMM and effortless for BlackBerry Curve 9300 CPU
-    private const val PCM_CHUNK_SIZE = 3200
+    // 500ms of 8000Hz 16-bit Mono = 4000 samples * 2 bytes = 8000 bytes per chunk
+    // 2 packets per second = ultra-lightweight for Bluetooth RFCOMM and effortless for BlackBerry Curve 9300 CPU
+    private const val PCM_CHUNK_SIZE = 8000
 
     private val isStreaming = AtomicBoolean(false)
     private var recordJob: Job? = null
@@ -51,7 +51,7 @@ object CallAudioBridge {
     private val _rxPackets = MutableStateFlow(0)
     val rxPackets: StateFlow<Int> = _rxPackets.asStateFlow()
 
-    private val _isVoipEnabled = MutableStateFlow(true) // Audio relay active
+    private val _isVoipEnabled = MutableStateFlow(false) // Default off: user activates via button
     val isVoipEnabled: StateFlow<Boolean> = _isVoipEnabled.asStateFlow()
 
     private val _isBridgeActive = MutableStateFlow(false)
@@ -65,9 +65,13 @@ object CallAudioBridge {
     }
 
     fun startStreaming(service: BluetoothService) {
-        if (!_isVoipEnabled.value) {
-            Log.d(TAG, "VoIP / Media audio relay is disabled in settings.")
+        if (!BridgeStateManager.isConnected.value) {
+            Log.d(TAG, "BlackBerry non connecté - diffusion audio ignorée")
             return
+        }
+
+        if (!_isVoipEnabled.value) {
+            _isVoipEnabled.value = true
         }
 
         if (isStreaming.get()) return
@@ -84,10 +88,10 @@ object CallAudioBridge {
         _rxPackets.value = 0
 
         Log.d(TAG, "Starting Universal Audio Streamer to BlackBerry Curve 9300...")
-        BridgeStateManager.logEvent("Relais Écouteur BlackBerry actif (WAV 8000Hz 200ms)", EventType.INFO)
+        BridgeStateManager.logEvent("Relais Écouteurs BB actif (WAV 8000Hz 500ms)", EventType.INFO)
 
-        // Notify BlackBerry that audio streaming has started with 200ms chunk configuration
-        service.sendPacket(BSBPacket("AUDIO_START", listOf(SAMPLE_RATE.toString(), CHANNELS.toString(), BITS_PER_SAMPLE.toString(), "200")))
+        // Notify BlackBerry that audio streaming has started with 500ms chunk configuration
+        service.sendPacket(BSBPacket("AUDIO_START", listOf(SAMPLE_RATE.toString(), CHANNELS.toString(), BITS_PER_SAMPLE.toString(), "500")))
         service.sendPacket(BSBPacket("VOICE_START", listOf(SAMPLE_RATE.toString(), CHANNELS.toString(), BITS_PER_SAMPLE.toString())))
 
         val audioManager = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
@@ -131,10 +135,10 @@ object CallAudioBridge {
                     val pcmBuffer = ByteArray(PCM_CHUNK_SIZE)
                     val txCounter = AtomicInteger(0)
 
-                    while (isStreaming.get() && isActive) {
-                        // Blocking read of 200ms audio chunk (3200 bytes = exactly 200ms pacing)
+                    while (isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
+                        // Blocking read of 500ms audio chunk (8000 bytes = exactly 500ms pacing)
                         var totalRead = 0
-                        while (totalRead < PCM_CHUNK_SIZE && isStreaming.get() && isActive) {
+                        while (totalRead < PCM_CHUNK_SIZE && isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
                             val r = audioRecord.read(pcmBuffer, totalRead, PCM_CHUNK_SIZE - totalRead)
                             if (r > 0) {
                                 totalRead += r

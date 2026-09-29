@@ -96,12 +96,18 @@ object BridgeStateManager {
     }
 
     fun logEvent(description: String, type: EventType = EventType.INFO) {
-        val newEvent = BridgeEvent(timeFormat.format(Date()), description, type)
+        // Prevent huge payloads (e.g. audio base64) from ever polluting the UI
+        val safeDesc = if (description.length > 140) description.substring(0, 140) + "..." else description
+        val newEvent = BridgeEvent(timeFormat.format(Date()), safeDesc, type)
         val current = _recentEvents.value.toMutableList()
         current.add(0, newEvent)
-        if (current.size > 500) {
+        if (current.size > 200) {
             current.removeAt(current.size - 1)
         }
         _recentEvents.value = current
+    }
+
+    fun clearLogs() {
+        _recentEvents.value = emptyList()
     }
 }
