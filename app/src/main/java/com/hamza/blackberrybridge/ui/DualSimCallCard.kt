@@ -300,7 +300,7 @@ fun DualSimCallCard(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (isBridgeActive) "● Diffusion Écouteurs Active (WAV 200ms)" else "En attente d'audio",
+                                text = if (isBridgeActive) "● Diffusion Écouteurs Active (WAV 500ms)" else "En attente d'audio",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (isBridgeActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                             )
