@@ -64,14 +64,20 @@ class MainActivity : ComponentActivity() {
 
     private val mediaProjectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK && result.data != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
-                    val mp = mediaProjectionManager?.getMediaProjection(result.resultCode, result.data!!)
-                    com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = mp
-                }
-            }
             val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+            try {
+                if (result.resultCode == RESULT_OK && result.data != null) {
+                    service?.updateForegroundForMediaProjection(true)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
+                        val mp = mediaProjectionManager?.getMediaProjection(result.resultCode, result.data!!)
+                        com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = mp
+                    }
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("MainActivity", "MediaProjection securise - repli micro: ${t.message}")
+                com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = null
+            }
             if (service != null) {
                 com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(service)
             }

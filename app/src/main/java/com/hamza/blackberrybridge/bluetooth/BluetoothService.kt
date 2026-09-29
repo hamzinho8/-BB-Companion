@@ -35,15 +35,46 @@ class BluetoothService : Service() {
         instance = this
         com.hamza.blackberrybridge.state.BridgeStateManager.setServiceRunning(true)
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("BlackBerry déconnecté"))
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                startForeground(
+                    NOTIFICATION_ID,
+                    buildNotification("BlackBerry déconnecté"),
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                )
+            } catch (e: Exception) {
+                startForeground(NOTIFICATION_ID, buildNotification("BlackBerry déconnecté"))
+            }
+        } else {
+            startForeground(NOTIFICATION_ID, buildNotification("BlackBerry déconnecté"))
+        }
         
         bluetoothManager = BBBluetoothManager(this)
-        
         batteryManager = com.hamza.blackberrybridge.battery.BatteryBridgeManager(this)
         batteryManager?.startMonitoring()
         telemetryManager = com.hamza.blackberrybridge.telemetry.NetworkTelemetryManager(this)
         telemetryManager?.startMonitoring()
         com.hamza.blackberrybridge.media.MediaSessionController.startListening(this)
+    }
+
+    fun updateForegroundForMediaProjection(enable: Boolean) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val type = if (enable) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                    } else {
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                    }
+                } else {
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                }
+                startForeground(NOTIFICATION_ID, buildNotification(if (enable) "Diffusion Audio BlackBerry active" else "Passerelle BlackBerry active"), type)
+            } catch (e: Exception) {
+                android.util.Log.w("BluetoothService", "startForeground type update: ${e.message}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -136,8 +136,8 @@ object CallAudioBridge {
                     val bufferSize = maxOf(minBuf, PCM_CHUNK_SIZE * 4)
                     val sources = listOf(
                         MediaRecorder.AudioSource.MIC,
+                        MediaRecorder.AudioSource.CAMCORDER,
                         MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                        MediaRecorder.AudioSource.VOICE_RECOGNITION,
                         MediaRecorder.AudioSource.DEFAULT
                     )
 
@@ -163,18 +163,33 @@ object CallAudioBridge {
                     val txCounter = AtomicInteger(0)
 
                     while (isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
-                        // Blocking read of exactly 8000 bytes (500 ms at 8000Hz 16-bit Mono)
                         var bytesRead = 0
                         while (bytesRead < PCM_CHUNK_SIZE && isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
                             val r = audioRecord.read(pcmBuffer, bytesRead, PCM_CHUNK_SIZE - bytesRead)
                             if (r > 0) {
                                 bytesRead += r
+                            } else if (r == 0) {
+                                delay(10)
                             } else {
+                                Log.w(TAG, "AudioRecord read code retour: $r")
+                                delay(25)
+                                try {
+                                    if (audioRecord.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+                                        audioRecord.startRecording()
+                                    }
+                                } catch (e: Exception) {}
                                 break
                             }
                         }
 
-                        if (bytesRead == PCM_CHUNK_SIZE) {
+                        // Pad with silence if partial read to always send a valid 8000-byte block (continuous audio)
+                        if (bytesRead > 0) {
+                            if (bytesRead < PCM_CHUNK_SIZE) {
+                                for (i in bytesRead until PCM_CHUNK_SIZE) {
+                                    pcmBuffer[i] = 0
+                                }
+                            }
+
                             // Génération de l'en-tête WAV 44 octets exact
                             val wavHeader = createWavHeader(PCM_CHUNK_SIZE, SAMPLE_RATE, CHANNELS, BITS_PER_SAMPLE)
                             
@@ -191,6 +206,8 @@ object CallAudioBridge {
 
                             val count = txCounter.incrementAndGet()
                             _txPackets.value = count
+                        } else {
+                            delay(20)
                         }
                     }
                 } else {
