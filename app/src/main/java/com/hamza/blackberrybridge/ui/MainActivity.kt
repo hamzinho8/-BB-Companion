@@ -58,8 +58,42 @@ class MainActivity : ComponentActivity() {
             // In a real app, handle permission denials gracefully.
         }
 
+    companion object {
+        var instance: MainActivity? = null
+    }
+
+    private val mediaProjectionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK && result.data != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
+                    val mp = mediaProjectionManager?.getMediaProjection(result.resultCode, result.data!!)
+                    com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = mp
+                }
+            }
+            val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+            if (service != null) {
+                com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(service)
+            }
+        }
+
+    fun requestMediaProjectionAndStartAudio() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
+            if (mediaProjectionManager != null) {
+                mediaProjectionLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                return
+            }
+        }
+        val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+        if (service != null) {
+            com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(service)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        instance = this
         enableEdgeToEdge()
         requestPermissions()
 
@@ -69,6 +103,13 @@ class MainActivity : ComponentActivity() {
                     AppNavigation(modifier = Modifier.padding(innerPadding))
                 }
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (instance == this) {
+            instance = null
         }
     }
 

@@ -288,6 +288,16 @@ fun DualSimCallCard(
                             checked = isVoipEnabled,
                             onCheckedChange = { checked ->
                                 com.hamza.blackberrybridge.audio.CallAudioBridge.setVoipEnabled(checked)
+                                if (checked && !isBridgeActive) {
+                                    val main = MainActivity.instance
+                                    if (main != null) {
+                                        main.requestMediaProjectionAndStartAudio()
+                                    } else {
+                                        com.hamza.blackberrybridge.bluetooth.BluetoothService.instance?.let {
+                                            com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(it)
+                                        }
+                                    }
+                                }
                             }
                         )
                     }
@@ -315,9 +325,17 @@ fun DualSimCallCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = {
-                            val s = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
-                            if (s != null) {
-                                com.hamza.blackberrybridge.audio.CallAudioBridge.toggleStreaming(s)
+                            if (isBridgeActive) {
+                                com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
+                            } else {
+                                val main = MainActivity.instance
+                                if (main != null) {
+                                    main.requestMediaProjectionAndStartAudio()
+                                } else {
+                                    com.hamza.blackberrybridge.bluetooth.BluetoothService.instance?.let {
+                                        com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(it)
+                                    }
+                                }
                             }
                         },
                         modifier = Modifier.fillMaxWidth(),
