@@ -42,6 +42,8 @@ fun DualSimCallCard(
     val isVoipEnabled by com.hamza.blackberrybridge.audio.CallAudioBridge.isVoipEnabled.collectAsState()
     val txPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.txPackets.collectAsState()
     val rxPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.rxPackets.collectAsState()
+    val isDigitalCapture by com.hamza.blackberrybridge.audio.CallAudioBridge.isDigitalCapture.collectAsState()
+    val isSpeakerMuted by com.hamza.blackberrybridge.audio.CallAudioBridge.isSpeakerMuted.collectAsState()
 
     var testSpeakerFeedback by remember { mutableStateOf<String?>(null) }
 
@@ -310,7 +312,9 @@ fun DualSimCallCard(
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = if (isBridgeActive) "● Diffusion Écouteurs Active (WAV 500ms)" else "En attente d'audio",
+                                text = if (isBridgeActive) {
+                                    if (isDigitalCapture) "● Audio Numérique YouTube/Musique (Pur)" else "● Micro Smartphone Actif"
+                                } else "En attente d'audio",
                                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                                 color = if (isBridgeActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
                             )
@@ -353,6 +357,26 @@ fun DualSimCallCard(
                         Text(
                             text = if (isBridgeActive) "Arrêter la diffusion audio" else "🎧 Diffuser le son (YouTube, Musique, Appels)",
                             fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedButton(
+                        onClick = {
+                            com.hamza.blackberrybridge.audio.CallAudioBridge.toggleSpeakerMute(context)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isSpeakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isSpeakerMuted) "HP Smartphone : Coupé (Mode Écouteurs Privé)" else "HP Smartphone : Actif (Son audible sur smartphone)",
+                            fontSize = 11.sp
                         )
                     }
                 }
