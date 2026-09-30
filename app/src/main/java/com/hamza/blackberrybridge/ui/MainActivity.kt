@@ -82,12 +82,20 @@ class MainActivity : ComponentActivity() {
                         val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
                         val mp = mediaProjectionManager?.getMediaProjection(result.resultCode, result.data!!)
                         if (mp != null) {
+                            mp.registerCallback(object : android.media.projection.MediaProjection.Callback() {
+                                override fun onStop() {
+                                    com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
+                                }
+                            }, android.os.Handler(android.os.Looper.getMainLooper()))
                             com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = mp
                             android.util.Log.d("MainActivity", "MediaProjection Android 11 initialisé avec succès !")
                             com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Autorisation son Android 11 accordée !", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                        } else {
+                            com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("MediaProjection retourné null par Android", com.hamza.blackberrybridge.state.EventType.ERROR)
                         }
                     } catch (t: Throwable) {
                         android.util.Log.e("MainActivity", "Erreur direct getMediaProjection Android 11: ${t.message}", t)
+                        com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Erreur capture son: ${t.message}", com.hamza.blackberrybridge.state.EventType.ERROR)
                     }
                 }
             }

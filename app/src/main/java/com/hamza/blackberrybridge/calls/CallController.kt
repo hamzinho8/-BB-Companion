@@ -20,6 +20,8 @@ import com.hamza.blackberrybridge.telephony.SimManager
 object CallController {
     private const val TAG = "CallController"
 
+    var isCallActive: Boolean = false
+
     @SuppressLint("MissingPermission")
     fun answerCall(context: Context, callId: String = "") {
         // Try Telecom InCallService first if active

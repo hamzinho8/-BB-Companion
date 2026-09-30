@@ -155,13 +155,16 @@ object CallAudioBridge {
                         Triple(48000, AudioFormat.CHANNEL_IN_STEREO, 2),
                         Triple(48000, AudioFormat.CHANNEL_IN_MONO, 1),
                         Triple(44100, AudioFormat.CHANNEL_IN_STEREO, 2),
-                        Triple(44100, AudioFormat.CHANNEL_IN_MONO, 1)
+                        Triple(44100, AudioFormat.CHANNEL_IN_MONO, 1),
+                        Triple(16000, AudioFormat.CHANNEL_IN_MONO, 1),
+                        Triple(8000, AudioFormat.CHANNEL_IN_MONO, 1)
                     )
 
                     for ((sr, chMask, chCount) in configs) {
                         try {
                             val minBuf = AudioRecord.getMinBufferSize(sr, chMask, AudioFormat.ENCODING_PCM_16BIT)
                             if (minBuf <= 0) continue
+                            val bufferBytes = maxOf(minBuf * 4, sr * chCount * 4)
                             val ar = AudioRecord.Builder()
                                 .setAudioPlaybackCaptureConfig(captureConfig)
                                 .setAudioFormat(
@@ -171,7 +174,7 @@ object CallAudioBridge {
                                         .setChannelMask(chMask)
                                         .build()
                                 )
-                                .setBufferSizeInBytes(maxOf(minBuf, sr * chCount))
+                                .setBufferSizeInBytes(bufferBytes)
                                 .build()
 
                             if (ar.state == AudioRecord.STATE_INITIALIZED) {
@@ -179,8 +182,8 @@ object CallAudioBridge {
                                 captureRate = sr
                                 captureChannels = chCount
                                 isDigital = true
-                                Log.d(TAG, "AudioPlaybackCapture (Son Numérique YouTube/Musique/Appels) INITIALISÉ : ${sr}Hz ${chCount}ch")
-                                BridgeStateManager.logEvent("Audio Numérique Haut-parleur connecté (${sr}Hz)", EventType.SUCCESS)
+                                Log.d(TAG, "AudioPlaybackCapture (Son Numérique YouTube/Musique) INITIALISÉ : ${sr}Hz ${chCount}ch (buf: ${bufferBytes}b)")
+                                BridgeStateManager.logEvent("Audio Numérique YouTube/Médias connecté (${sr}Hz)", EventType.SUCCESS)
                                 break
                             } else {
                                 ar.release()
@@ -193,10 +196,36 @@ object CallAudioBridge {
 
                 _isDigitalCapture.value = isDigital
 
-                // Strict rule: NEVER use the microphone. If digital capture is not initialized, wait or notify.
+                // Telephony voice call capture: if in a call or digital capture is unavailable
+                val isCallActive = com.hamza.blackberrybridge.calls.BridgeInCallService.activeCall != null || com.hamza.blackberrybridge.calls.CallController.isCallActive
                 if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-                    Log.w(TAG, "Capture numérique non prête - en attente d'autorisation de projection...")
-                    BridgeStateManager.logEvent("En attente validation 'Commencer' pour audio numérique", EventType.WARNING)
+                    val voiceSource = if (isCallActive) {
+                        MediaRecorder.AudioSource.VOICE_COMMUNICATION
+                    } else {
+                        MediaRecorder.AudioSource.VOICE_RECOGNITION
+                    }
+                    try {
+                        val minBuf = AudioRecord.getMinBufferSize(TARGET_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                        val ar = AudioRecord(
+                            voiceSource,
+                            TARGET_SAMPLE_RATE,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            maxOf(minBuf * 4, PCM_CHUNK_SIZE * 4)
+                        )
+                        if (ar.state == AudioRecord.STATE_INITIALIZED) {
+                            audioRecord = ar
+                            captureRate = TARGET_SAMPLE_RATE
+                            captureChannels = 1
+                            isDigital = false
+                            Log.d(TAG, "AudioRecord initialisé avec la source vocale: $voiceSource")
+                            BridgeStateManager.logEvent("Audio Appel/Ligne téléphonique actif", EventType.SUCCESS)
+                        } else {
+                            ar.release()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Échec capture vocale $voiceSource: ${e.message}")
+                    }
                 }
 
                 if (audioRecord != null && audioRecord.state == AudioRecord.STATE_INITIALIZED) {
@@ -211,20 +240,19 @@ object CallAudioBridge {
                     while (isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
                         var shortsRead = 0
                         while (shortsRead < totalShortsFor500ms && isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
-                            val r = audioRecord.read(captureBuffer, shortsRead, totalShortsFor500ms - shortsRead)
+                            val toRead = minOf(1024, totalShortsFor500ms - shortsRead)
+                            val r = audioRecord.read(captureBuffer, shortsRead, toRead)
                             if (r > 0) {
                                 shortsRead += r
                             } else if (r == 0) {
-                                delay(10)
+                                delay(5)
                             } else {
-                                Log.w(TAG, "AudioRecord code retour: $r")
-                                delay(25)
+                                delay(10)
                                 try {
                                     if (audioRecord.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                                         audioRecord.startRecording()
                                     }
                                 } catch (e: Exception) {}
-                                break
                             }
                         }
 
