@@ -39,11 +39,21 @@ class AudioProjectionService : Service() {
     }
 
     private var mediaProjection: MediaProjection? = null
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         createNotificationChannel()
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            wakeLock = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "BBBridge:AudioProjectionWakeLock").apply {
+                setReferenceCounted(false)
+                acquire(24 * 60 * 60 * 1000L) // Empêche la mise en veille CPU en arrière-plan
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "WakeLock exception: ${e.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -120,6 +130,9 @@ class AudioProjectionService : Service() {
     }
 
     override fun onDestroy() {
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+        } catch (e: Exception) {}
         super.onDestroy()
         stopProjection()
         instance = null

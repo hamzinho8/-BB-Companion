@@ -49,6 +49,7 @@ fun DualSimCallCard(
     val hasAudioSignal by com.hamza.blackberrybridge.audio.CallAudioBridge.hasAudioSignal.collectAsState()
     val captureStatus by com.hamza.blackberrybridge.audio.CallAudioBridge.captureStatus.collectAsState()
     val totalBytesSent by com.hamza.blackberrybridge.audio.CallAudioBridge.totalBytesSent.collectAsState()
+    val currentSampleRate by com.hamza.blackberrybridge.audio.CallAudioBridge.sampleRate.collectAsState()
 
     var testSpeakerFeedback by remember { mutableStateOf<String?>(null) }
 
@@ -429,11 +430,36 @@ fun DualSimCallCard(
                                         color = MaterialTheme.colorScheme.secondary
                                     )
                                     Text(
-                                        text = "🎛️ 8kHz Mono",
+                                        text = "🎛️ ${currentSampleRate / 1000}kHz HD",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                 }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            // Audio Quality Selector
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Qualité :",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                FilterChip(
+                                    selected = currentSampleRate == 16000,
+                                    onClick = { com.hamza.blackberrybridge.audio.CallAudioBridge.setSampleRate(16000) },
+                                    label = { Text("💎 16 kHz HD", fontSize = 10.sp) }
+                                )
+                                FilterChip(
+                                    selected = currentSampleRate == 8000,
+                                    onClick = { com.hamza.blackberrybridge.audio.CallAudioBridge.setSampleRate(8000) },
+                                    label = { Text("📞 8 kHz Voix", fontSize = 10.sp) }
+                                )
                             }
                         }
                     }
