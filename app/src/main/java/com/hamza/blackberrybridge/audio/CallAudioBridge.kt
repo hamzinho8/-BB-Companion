@@ -196,18 +196,13 @@ object CallAudioBridge {
 
                 _isDigitalCapture.value = isDigital
 
-                // Telephony voice call capture: if in a call or digital capture is unavailable
+                // Telephony voice call capture: ONLY when a phone call is actively ongoing
                 val isCallActive = com.hamza.blackberrybridge.calls.BridgeInCallService.activeCall != null || com.hamza.blackberrybridge.calls.CallController.isCallActive
-                if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-                    val voiceSource = if (isCallActive) {
-                        MediaRecorder.AudioSource.VOICE_COMMUNICATION
-                    } else {
-                        MediaRecorder.AudioSource.VOICE_RECOGNITION
-                    }
+                if (isCallActive && (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED)) {
                     try {
                         val minBuf = AudioRecord.getMinBufferSize(TARGET_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
                         val ar = AudioRecord(
-                            voiceSource,
+                            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
                             TARGET_SAMPLE_RATE,
                             AudioFormat.CHANNEL_IN_MONO,
                             AudioFormat.ENCODING_PCM_16BIT,
@@ -218,14 +213,20 @@ object CallAudioBridge {
                             captureRate = TARGET_SAMPLE_RATE
                             captureChannels = 1
                             isDigital = false
-                            Log.d(TAG, "AudioRecord initialisé avec la source vocale: $voiceSource")
-                            BridgeStateManager.logEvent("Audio Appel/Ligne téléphonique actif", EventType.SUCCESS)
+                            Log.d(TAG, "AudioRecord initialisé pour appel téléphonique (VOICE_COMMUNICATION)")
+                            BridgeStateManager.logEvent("Audio Appel téléphonique connecté (Ligne)", EventType.SUCCESS)
                         } else {
                             ar.release()
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Échec capture vocale $voiceSource: ${e.message}")
+                        Log.w(TAG, "Échec capture vocale appel: ${e.message}")
                     }
+                }
+
+                // Strict rule: NEVER use the microphone for media. If digital capture is not initialized, wait or notify.
+                if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
+                    Log.w(TAG, "Aucune source audio valide disponible (zéro micro)")
+                    BridgeStateManager.logEvent("En attente validation 'Commencer' pour audio numérique", EventType.WARNING)
                 }
 
                 if (audioRecord != null && audioRecord.state == AudioRecord.STATE_INITIALIZED) {

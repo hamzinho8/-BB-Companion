@@ -65,39 +65,20 @@ class MainActivity : ComponentActivity() {
     private val mediaProjectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK && result.data != null) {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    try {
-                        val intent = Intent(this, com.hamza.blackberrybridge.audio.AudioProjectionService::class.java).apply {
-                            putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_CODE, result.resultCode)
-                            putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_DATA, result.data)
-                        }
-                        androidx.core.content.ContextCompat.startForegroundService(this, intent)
-                        return@registerForActivityResult
-                    } catch (t: Throwable) {
-                        android.util.Log.e("MainActivity", "Erreur demarrage AudioProjectionService: ${t.message}", t)
+                try {
+                    val intent = Intent(this, com.hamza.blackberrybridge.audio.AudioProjectionService::class.java).apply {
+                        putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_CODE, result.resultCode)
+                        putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_DATA, result.data)
                     }
-                } else {
-                    // Android 11 (Appareil Xiaomi MIUI 12.5 de l'utilisateur) : obtention directe sans blocage IPC
-                    try {
-                        val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
-                        val mp = mediaProjectionManager?.getMediaProjection(result.resultCode, result.data!!)
-                        if (mp != null) {
-                            mp.registerCallback(object : android.media.projection.MediaProjection.Callback() {
-                                override fun onStop() {
-                                    com.hamza.blackberrybridge.audio.CallAudioBridge.stopStreaming()
-                                }
-                            }, android.os.Handler(android.os.Looper.getMainLooper()))
-                            com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = mp
-                            android.util.Log.d("MainActivity", "MediaProjection Android 11 initialisé avec succès !")
-                            com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Autorisation son Android 11 accordée !", com.hamza.blackberrybridge.state.EventType.SUCCESS)
-                        } else {
-                            com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("MediaProjection retourné null par Android", com.hamza.blackberrybridge.state.EventType.ERROR)
-                        }
-                    } catch (t: Throwable) {
-                        android.util.Log.e("MainActivity", "Erreur direct getMediaProjection Android 11: ${t.message}", t)
-                        com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Erreur capture son: ${t.message}", com.hamza.blackberrybridge.state.EventType.ERROR)
-                    }
+                    androidx.core.content.ContextCompat.startForegroundService(this, intent)
+                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Capture audio numérique validée !", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                    return@registerForActivityResult
+                } catch (t: Throwable) {
+                    android.util.Log.e("MainActivity", "Erreur demarrage AudioProjectionService: ${t.message}", t)
+                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Erreur service capture: ${t.message}", com.hamza.blackberrybridge.state.EventType.ERROR)
                 }
+            } else {
+                com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Autorisation capture d'écran refusée", com.hamza.blackberrybridge.state.EventType.WARNING)
             }
             val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
             if (service != null) {

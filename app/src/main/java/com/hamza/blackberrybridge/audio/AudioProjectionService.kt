@@ -16,6 +16,8 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.hamza.blackberrybridge.R
 import com.hamza.blackberrybridge.bluetooth.BluetoothService
+import com.hamza.blackberrybridge.state.BridgeStateManager
+import com.hamza.blackberrybridge.state.EventType
 
 /**
  * Dedicated Foreground Service for MediaProjection on Android 14+ (API 34+).
@@ -82,9 +84,11 @@ class AudioProjectionService : Service() {
                     mediaProjection = mp
                     CallAudioBridge.activeMediaProjection = mp
                     Log.d(TAG, "MediaProjection initialisé et callback enregistré !")
+                    BridgeStateManager.logEvent("MediaProjection validé (Pur Numérique) !", EventType.SUCCESS)
                 } else {
                     Log.e(TAG, "MediaProjectionManager.getMediaProjection a retourné null")
                     CallAudioBridge.activeMediaProjection = null
+                    BridgeStateManager.logEvent("MediaProjection retourné null par le système", EventType.ERROR)
                 }
 
                 // Start Bluetooth streaming
@@ -94,9 +98,11 @@ class AudioProjectionService : Service() {
             } catch (t: Throwable) {
                 Log.e(TAG, "Erreur initialisation MediaProjection: ${t.message}", t)
                 CallAudioBridge.activeMediaProjection = null
+                BridgeStateManager.logEvent("Erreur init MediaProjection: ${t.message}", EventType.ERROR)
             }
         } else {
             Log.w(TAG, "Données de projection manquantes ou invalides")
+            BridgeStateManager.logEvent("Données de projection manquantes (code: $resultCode)", EventType.WARNING)
             BluetoothService.instance?.let { service ->
                 CallAudioBridge.startStreaming(service)
             }
