@@ -38,7 +38,12 @@
         <service
             android:name="com.hamza.blackberrybridge.bluetooth.BluetoothService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice|mediaProjection" />
+            android:foregroundServiceType="connectedDevice" />
+
+        <service
+            android:name="com.hamza.blackberrybridge.audio.AudioProjectionService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
 
         <service
             android:name="com.hamza.blackberrybridge.notification.BridgeNotificationListener"

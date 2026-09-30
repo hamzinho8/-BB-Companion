@@ -2,6 +2,7 @@ package com.hamza.blackberrybridge.audio
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
@@ -60,7 +61,7 @@ object CallAudioBridge {
     private val _isDigitalCapture = MutableStateFlow(false)
     val isDigitalCapture: StateFlow<Boolean> = _isDigitalCapture.asStateFlow()
 
-    private val _isSpeakerMuted = MutableStateFlow(true)
+    private val _isSpeakerMuted = MutableStateFlow(false)
     val isSpeakerMuted: StateFlow<Boolean> = _isSpeakerMuted.asStateFlow()
 
     // Holds MediaProjection for Android 10+ internal digital audio capture
@@ -80,11 +81,14 @@ object CallAudioBridge {
         _isSpeakerMuted.value = newMuted
         try {
             if (newMuted) {
-                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
-                BridgeStateManager.logEvent("Haut-parleur smartphone coupé (Mode Écouteurs)", EventType.INFO)
+                savedMediaVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, 1, 0)
+                BridgeStateManager.logEvent("Volume HP smartphone réduit au minimum (1)", EventType.INFO)
             } else {
-                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-                BridgeStateManager.logEvent("Haut-parleur smartphone rétabli", EventType.INFO)
+                if (savedMediaVolume >= 0) {
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, savedMediaVolume, 0)
+                }
+                BridgeStateManager.logEvent("Volume HP smartphone rétabli", EventType.INFO)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Erreur réglage volume HP: ${e.message}")
@@ -112,22 +116,9 @@ object CallAudioBridge {
         _txPackets.value = 0
         _rxPackets.value = 0
 
-        // Optionally mute the phone speaker like real Bluetooth earphones
-        if (_isSpeakerMuted.value) {
-            try {
-                val am = service.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                if (am != null) {
-                    savedMediaVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-                    am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
-                    Log.d(TAG, "Haut-parleur smartphone coupé pour mode écouteurs")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Impossible de couper le HP: ${e.message}")
-            }
-        }
-
-        Log.d(TAG, "Démarrage diffusion audio Bluetooth vers BlackBerry...")
-        BridgeStateManager.logEvent("Diffusion Audio BB active (WAV 500ms)", EventType.INFO)
+        // Do not mute phone speaker automatically so AudioFlinger does not attenuate the capture buffer to 0
+        Log.d(TAG, "Démarrage diffusion audio Bluetooth vers BlackBerry (100% Numérique, aucun micro)...")
+        BridgeStateManager.logEvent("Diffusion Audio BB (Pur Numérique)", EventType.INFO)
 
         // 1. Signal de début exact : "AUDIO_START\n"
         service.sendPacket(BSBPacket("AUDIO_START", emptyList()))
@@ -139,12 +130,17 @@ object CallAudioBridge {
             var isDigital = false
 
             try {
-                // 1. Try Android 10+ Internal Digital Media Playback Capture FIRST
+                // 1. Android 10+ Internal Digital Media Playback Capture (100% pure audio from speakers)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && activeMediaProjection != null) {
                     val captureConfig = AudioPlaybackCaptureConfiguration.Builder(activeMediaProjection!!)
                         .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                         .addMatchingUsage(AudioAttributes.USAGE_GAME)
                         .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+                        .addMatchingUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                        .addMatchingUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION_SIGNALLING)
+                        .addMatchingUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .addMatchingUsage(AudioAttributes.USAGE_ALARM)
+                        .addMatchingUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                         .build()
 
                     // Try native sample rates and channels that Android AudioFlinger supports
@@ -176,8 +172,8 @@ object CallAudioBridge {
                                 captureRate = sr
                                 captureChannels = chCount
                                 isDigital = true
-                                Log.d(TAG, "AudioPlaybackCapture (Son Numérique YouTube/Musique) INITIALISÉ : ${sr}Hz ${chCount}ch")
-                                BridgeStateManager.logEvent("Audio Numérique YouTube/Musique connecté (${sr}Hz)", EventType.SUCCESS)
+                                Log.d(TAG, "AudioPlaybackCapture (Son Numérique YouTube/Musique/Appels) INITIALISÉ : ${sr}Hz ${chCount}ch")
+                                BridgeStateManager.logEvent("Audio Numérique Haut-parleur connecté (${sr}Hz)", EventType.SUCCESS)
                                 break
                             } else {
                                 ar.release()
@@ -190,34 +186,10 @@ object CallAudioBridge {
 
                 _isDigitalCapture.value = isDigital
 
-                // 2. Fallback to physical microphone if MediaProjection is not active
+                // Strict rule: NEVER use the microphone. If digital capture is not initialized, wait or notify.
                 if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
-                    Log.d(TAG, "Bascule sur microphone physique (fallback)")
-                    captureRate = TARGET_SAMPLE_RATE
-                    captureChannels = 1
-                    val minBuf = AudioRecord.getMinBufferSize(TARGET_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                    val bufferSize = maxOf(minBuf, PCM_CHUNK_SIZE * 4)
-                    val sources = listOf(
-                        MediaRecorder.AudioSource.CAMCORDER,
-                        MediaRecorder.AudioSource.MIC,
-                        MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                        MediaRecorder.AudioSource.DEFAULT
-                    )
-
-                    for (source in sources) {
-                        try {
-                            val ar = AudioRecord(source, TARGET_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
-                            if (ar.state == AudioRecord.STATE_INITIALIZED) {
-                                audioRecord = ar
-                                Log.d(TAG, "AudioRecord initialisé avec la source micro: $source")
-                                break
-                            } else {
-                                ar.release()
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Erreur source $source: ${e.message}")
-                        }
-                    }
+                    Log.w(TAG, "Capture numérique non prête - en attente d'autorisation de projection...")
+                    BridgeStateManager.logEvent("En attente validation 'Commencer' pour audio numérique", EventType.WARNING)
                 }
 
                 if (audioRecord != null && audioRecord.state == AudioRecord.STATE_INITIALIZED) {
@@ -366,6 +338,17 @@ object CallAudioBridge {
         // 3. Signal de fin exact : "AUDIO_STOP\n"
         BluetoothService.instance?.sendPacket(BSBPacket("AUDIO_STOP", emptyList()))
         BridgeStateManager.logEvent("Diffusion Audio BB arrêtée", EventType.INFO)
+
+        // Stop AudioProjectionService
+        try {
+            val s = BluetoothService.instance
+            if (s != null) {
+                val stopIntent = Intent(s, AudioProjectionService::class.java).apply {
+                    action = AudioProjectionService.ACTION_STOP
+                }
+                s.startService(stopIntent)
+            }
+        } catch (e: Exception) {}
     }
 
     fun toggleStreaming(service: BluetoothService) {
