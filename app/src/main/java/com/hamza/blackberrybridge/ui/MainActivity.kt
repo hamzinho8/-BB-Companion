@@ -65,18 +65,32 @@ class MainActivity : ComponentActivity() {
     private val mediaProjectionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == RESULT_OK && result.data != null) {
-                try {
-                    val intent = Intent(this, com.hamza.blackberrybridge.audio.AudioProjectionService::class.java).apply {
-                        putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_CODE, result.resultCode)
-                        putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_DATA, result.data)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    try {
+                        val intent = Intent(this, com.hamza.blackberrybridge.audio.AudioProjectionService::class.java).apply {
+                            putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_CODE, result.resultCode)
+                            putExtra(com.hamza.blackberrybridge.audio.AudioProjectionService.EXTRA_RESULT_DATA, result.data)
+                        }
+                        androidx.core.content.ContextCompat.startForegroundService(this, intent)
+                        return@registerForActivityResult
+                    } catch (t: Throwable) {
+                        android.util.Log.e("MainActivity", "Erreur demarrage AudioProjectionService: ${t.message}", t)
                     }
-                    androidx.core.content.ContextCompat.startForegroundService(this, intent)
-                    return@registerForActivityResult
-                } catch (t: Throwable) {
-                    android.util.Log.e("MainActivity", "Erreur demarrage AudioProjectionService: ${t.message}", t)
+                } else {
+                    // Android 11 (Appareil Xiaomi MIUI 12.5 de l'utilisateur) : obtention directe sans blocage IPC
+                    try {
+                        val mediaProjectionManager = getSystemService(MEDIA_PROJECTION_SERVICE) as? android.media.projection.MediaProjectionManager
+                        val mp = mediaProjectionManager?.getMediaProjection(result.resultCode, result.data!!)
+                        if (mp != null) {
+                            com.hamza.blackberrybridge.audio.CallAudioBridge.activeMediaProjection = mp
+                            android.util.Log.d("MainActivity", "MediaProjection Android 11 initialisé avec succès !")
+                            com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Autorisation son Android 11 accordée !", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                        }
+                    } catch (t: Throwable) {
+                        android.util.Log.e("MainActivity", "Erreur direct getMediaProjection Android 11: ${t.message}", t)
+                    }
                 }
             }
-            // Fallback to standard audio streaming if projection cancelled
             val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
             if (service != null) {
                 com.hamza.blackberrybridge.audio.CallAudioBridge.startStreaming(service)

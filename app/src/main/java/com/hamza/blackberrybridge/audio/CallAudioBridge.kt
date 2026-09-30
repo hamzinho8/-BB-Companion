@@ -136,11 +136,6 @@ object CallAudioBridge {
                         .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                         .addMatchingUsage(AudioAttributes.USAGE_GAME)
                         .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-                        .addMatchingUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-                        .addMatchingUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION_SIGNALLING)
-                        .addMatchingUsage(AudioAttributes.USAGE_NOTIFICATION)
-                        .addMatchingUsage(AudioAttributes.USAGE_ALARM)
-                        .addMatchingUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
                         .build()
 
                     // Try native sample rates and channels that Android AudioFlinger supports
