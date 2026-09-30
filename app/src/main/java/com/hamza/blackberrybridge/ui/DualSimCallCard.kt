@@ -3,6 +3,7 @@ package com.hamza.blackberrybridge.ui
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -44,6 +45,10 @@ fun DualSimCallCard(
     val rxPackets by com.hamza.blackberrybridge.audio.CallAudioBridge.rxPackets.collectAsState()
     val isDigitalCapture by com.hamza.blackberrybridge.audio.CallAudioBridge.isDigitalCapture.collectAsState()
     val isSpeakerMuted by com.hamza.blackberrybridge.audio.CallAudioBridge.isSpeakerMuted.collectAsState()
+    val audioLevel by com.hamza.blackberrybridge.audio.CallAudioBridge.audioLevel.collectAsState()
+    val hasAudioSignal by com.hamza.blackberrybridge.audio.CallAudioBridge.hasAudioSignal.collectAsState()
+    val captureStatus by com.hamza.blackberrybridge.audio.CallAudioBridge.captureStatus.collectAsState()
+    val totalBytesSent by com.hamza.blackberrybridge.audio.CallAudioBridge.totalBytesSent.collectAsState()
 
     var testSpeakerFeedback by remember { mutableStateOf<String?>(null) }
 
@@ -304,29 +309,136 @@ fun DualSimCallCard(
                         )
                     }
 
-                    if (isVoipEnabled && (isBridgeActive || txPackets > 0 || rxPackets > 0)) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                    // Visual Audio Stream Monitor
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isBridgeActive) {
+                                if (hasAudioSignal) Color(0xFF1B5E20).copy(alpha = 0.12f)
+                                else Color(0xFFE65100).copy(alpha = 0.10f)
+                            } else {
+                                MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                            }
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
                         ) {
+                            // Header with Status Badge and Animated Equalizer
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (isBridgeActive) {
+                                                    if (hasAudioSignal) Color(0xFF2E7D32) else Color(0xFFF57C00)
+                                                } else Color.Gray
+                                            )
+                                    )
+                                    Text(
+                                        text = if (isBridgeActive) {
+                                            if (hasAudioSignal) "Signal audio détecté (Pur Numérique)"
+                                            else "Capture active - En attente de son"
+                                        } else "Diffusion arrêtée",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = if (isBridgeActive) {
+                                            if (hasAudioSignal) Color(0xFF2E7D32) else Color(0xFFE65100)
+                                        } else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                // 5 Animated Equalizer Bars
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                                    verticalAlignment = Alignment.Bottom,
+                                    modifier = Modifier.height(20.dp)
+                                ) {
+                                    val barMultipliers = listOf(0.6f, 1.0f, 0.75f, 1.2f, 0.85f)
+                                    barMultipliers.forEachIndexed { idx, mult ->
+                                        val targetHeight = if (isBridgeActive) {
+                                            if (hasAudioSignal) (6.dp + 14.dp * (audioLevel * mult).coerceIn(0.15f, 1.0f))
+                                            else 4.dp
+                                        } else 3.dp
+
+                                        val animatedH by animateDpAsState(
+                                            targetValue = targetHeight,
+                                            animationSpec = spring(stiffness = Spring.StiffnessHigh),
+                                            label = "bar_$idx"
+                                        )
+
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(animatedH)
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(
+                                                    if (isBridgeActive) {
+                                                        if (hasAudioSignal) Color(0xFF2E7D32) else Color(0xFFF57C00)
+                                                    } else Color.Gray.copy(alpha = 0.4f)
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            // Dynamic Status Message
                             Text(
                                 text = if (isBridgeActive) {
-                                    if (isDigitalCapture) "● Audio Numérique YouTube/Musique (Pur)" else "● Micro Smartphone Actif"
-                                } else "En attente d'audio",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                color = if (isBridgeActive) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
+                                    if (hasAudioSignal) "🎵 Son en cours de transmission vers BlackBerry (${(audioLevel * 100).toInt()}% puissance)"
+                                    else "⏸️ Aucun son détecté : lancez une vidéo YouTube ou de la musique sur le smartphone"
+                                } else "Prêt à diffuser le son numérique vers votre BlackBerry Curve 9300",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Text(
-                                text = "📤 $txPackets blocs envoyés",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.primary
-                            )
+
+                            if (isBridgeActive || txPackets > 0) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Metrics Row
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "📤 $txPackets blocs (~${txPackets / 2}s audio)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "📊 ${totalBytesSent / 1024} Ko transmis",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
+                                    Text(
+                                        text = "🎛️ 8kHz Mono",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Button(
                         onClick = {
                             if (isBridgeActive) {
@@ -361,23 +473,49 @@ fun DualSimCallCard(
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
-                    OutlinedButton(
-                        onClick = {
-                            com.hamza.blackberrybridge.audio.CallAudioBridge.toggleSpeakerMute(context)
-                        },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(10.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(
-                            imageVector = if (isSpeakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = if (isSpeakerMuted) "HP Smartphone : Coupé (Mode Écouteurs Privé)" else "HP Smartphone : Actif (Son audible sur smartphone)",
-                            fontSize = 11.sp
-                        )
+                        OutlinedButton(
+                            onClick = {
+                                com.hamza.blackberrybridge.audio.CallAudioBridge.toggleSpeakerMute(context)
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isSpeakerMuted) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isSpeakerMuted) "HP : Réduit (1)" else "HP : Normal",
+                                fontSize = 11.sp
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                com.hamza.blackberrybridge.bluetooth.BluetoothService.instance?.let { s ->
+                                    com.hamza.blackberrybridge.audio.CallAudioBridge.sendTestBeep(s)
+                                }
+                            },
+                            modifier = Modifier.weight(1.3f),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "🔔 Tester son BlackBerry",
+                                fontSize = 11.sp
+                            )
+                        }
                     }
                 }
             }

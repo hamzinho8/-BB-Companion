@@ -64,6 +64,18 @@ object CallAudioBridge {
     private val _isSpeakerMuted = MutableStateFlow(false)
     val isSpeakerMuted: StateFlow<Boolean> = _isSpeakerMuted.asStateFlow()
 
+    private val _audioLevel = MutableStateFlow(0f)
+    val audioLevel: StateFlow<Float> = _audioLevel.asStateFlow()
+
+    private val _hasAudioSignal = MutableStateFlow(false)
+    val hasAudioSignal: StateFlow<Boolean> = _hasAudioSignal.asStateFlow()
+
+    private val _captureStatus = MutableStateFlow("En attente")
+    val captureStatus: StateFlow<String> = _captureStatus.asStateFlow()
+
+    private val _totalBytesSent = MutableStateFlow(0L)
+    val totalBytesSent: StateFlow<Long> = _totalBytesSent.asStateFlow()
+
     // Holds MediaProjection for Android 10+ internal digital audio capture
     var activeMediaProjection: MediaProjection? = null
     private var savedMediaVolume = -1
@@ -242,6 +254,24 @@ object CallAudioBridge {
 
                             val count = txCounter.incrementAndGet()
                             _txPackets.value = count
+                            _totalBytesSent.value = _totalBytesSent.value + fullWav.size
+
+                            // Calculate RMS signal level for live VU-meter feedback
+                            var sumSquares = 0.0
+                            for (i in 0 until TARGET_SAMPLES) {
+                                val sample = downsampled[i].toDouble()
+                                sumSquares += sample * sample
+                            }
+                            val rms = kotlin.math.sqrt(sumSquares / TARGET_SAMPLES)
+                            val normalizedLevel = (rms / 6000.0).coerceIn(0.0, 1.0).toFloat()
+                            _audioLevel.value = normalizedLevel
+                            val isSignalPresent = rms > 60.0
+                            _hasAudioSignal.value = isSignalPresent
+                            _captureStatus.value = if (isSignalPresent) {
+                                "Signal audio détecté (${(normalizedLevel * 100).toInt()}% niveau)"
+                            } else {
+                                "Capture active - Silence détecté (lancez YouTube)"
+                            }
                         } else {
                             delay(20)
                         }
@@ -351,6 +381,45 @@ object CallAudioBridge {
             stopStreaming()
         } else {
             startStreaming(service)
+        }
+    }
+
+    /**
+     * Génère et envoie immédiatement un bip de test sinusoïdal 440 Hz (Note La4) de 500 ms
+     * pour vérifier instantanément le haut-parleur du BlackBerry.
+     */
+    fun sendTestBeep(service: BluetoothService) {
+        scope.launch {
+            try {
+                val freq = 440.0
+                val pcm = ByteArray(PCM_CHUNK_SIZE)
+                for (i in 0 until TARGET_SAMPLES) {
+                    val angle = 2.0 * Math.PI * freq * i / TARGET_SAMPLE_RATE
+                    val sample = (Math.sin(angle) * 16000.0).toInt().coerceIn(-32768, 32767).toShort()
+                    pcm[i * 2] = (sample.toInt() and 0xFF).toByte()
+                    pcm[i * 2 + 1] = ((sample.toInt() shr 8) and 0xFF).toByte()
+                }
+                val header = createWavHeader(PCM_CHUNK_SIZE, TARGET_SAMPLE_RATE, TARGET_CHANNELS, TARGET_BITS_PER_SAMPLE)
+                val fullWav = ByteArray(44 + PCM_CHUNK_SIZE)
+                System.arraycopy(header, 0, fullWav, 0, 44)
+                System.arraycopy(pcm, 0, fullWav, 44, PCM_CHUNK_SIZE)
+                val base64 = Base64.encodeToString(fullWav, Base64.NO_WRAP)
+
+                service.sendPacket(BSBPacket("AUDIO_START", emptyList()))
+                delay(30)
+                service.sendPacket(BSBPacket("AUDIO_CHUNK", listOf(base64)))
+                _txPackets.value = _txPackets.value + 1
+                _totalBytesSent.value = _totalBytesSent.value + fullWav.size
+                _audioLevel.value = 0.85f
+                _hasAudioSignal.value = true
+                _captureStatus.value = "Bip de test transmis vers BlackBerry (440Hz)"
+                BridgeStateManager.logEvent("Bip test transmis vers BlackBerry (440Hz)", EventType.SUCCESS)
+                delay(550)
+                _audioLevel.value = 0f
+                _hasAudioSignal.value = false
+            } catch (e: Exception) {
+                Log.e(TAG, "Erreur émission bip test", e)
+            }
         }
     }
 
