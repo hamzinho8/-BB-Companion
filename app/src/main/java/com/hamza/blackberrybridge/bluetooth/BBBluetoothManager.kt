@@ -197,18 +197,33 @@ class BBBluetoothManager(private val context: Context) {
         }
     }
     
+    private val isSendingAudio = java.util.concurrent.atomic.AtomicBoolean(false)
+
     fun sendMessage(message: String) {
+        val isAudio = message.startsWith("AUDIO_CHUNK")
+        if (isAudio) {
+            // Anti-latence absolue : si le paquet précédent est encore en transit, on jette l'ancien
+            // pour garantir que le BlackBerry reçoit TOUJOURS l'instant présent (zéro retard de 10s)
+            if (!isSendingAudio.compareAndSet(false, true)) {
+                return
+            }
+        }
+
         scope.launch {
             try {
                 outWriter?.print(message)
                 outWriter?.flush()
-                val isVoice = message.startsWith("VOICE_TX") || message.startsWith("VOICE_RX") || message.startsWith("AUDIO_CHUNK")
+                val isVoice = message.startsWith("VOICE_TX") || message.startsWith("VOICE_RX") || isAudio
                 if (!isVoice) {
                     Log.d(TAG, "Sent: $message")
                     BridgeStateManager.logEvent(message.trim(), com.hamza.blackberrybridge.state.EventType.TX)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error sending message", e)
+            } finally {
+                if (isAudio) {
+                    isSendingAudio.set(false)
+                }
             }
         }
     }

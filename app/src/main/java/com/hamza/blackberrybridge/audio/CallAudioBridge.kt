@@ -39,8 +39,8 @@ object CallAudioBridge {
     const val PCM_CHUNK_SIZE = 8000
     const val TARGET_SAMPLES = 4000
 
-    // Dynamic audio rate (16000 Hz HD by default for music & YouTube, or 8000 Hz)
-    private val _sampleRate = MutableStateFlow(16000)
+    // Dynamic audio rate (8000 Hz default for zero-delay BlackBerry streaming, or 16000 Hz HD)
+    private val _sampleRate = MutableStateFlow(8000)
     val sampleRate: StateFlow<Int> = _sampleRate.asStateFlow()
 
     const val TARGET_CHANNELS: Short = 1
@@ -107,29 +107,25 @@ object CallAudioBridge {
     fun onCallStarted(service: BluetoothService) {
         Log.d(TAG, "onCallStarted: Basculement vers l'audio d'appel (VOICE_COMMUNICATION)")
         BridgeStateManager.logEvent("Appel actif : routage audio d'appel vers BlackBerry", EventType.INFO)
-        if (isStreaming.get()) {
-            recordJob?.cancel()
-            recordJob = null
-            isStreaming.set(false)
-        }
+        recordJob?.cancel()
+        recordJob = null
+        isStreaming.set(false)
         startStreaming(service)
     }
 
     fun onCallEnded(service: BluetoothService) {
         Log.d(TAG, "onCallEnded: Fin d'appel, reprise automatique du son multimédia")
-        BridgeStateManager.logEvent("Fin d'appel : reprise audio sans interruption", EventType.INFO)
-        if (isStreaming.get()) {
-            recordJob?.cancel()
-            recordJob = null
-            isStreaming.set(false)
-        }
+        BridgeStateManager.logEvent("Fin d'appel : reprise audio sans coupure", EventType.INFO)
+        recordJob?.cancel()
+        recordJob = null
+        isStreaming.set(false)
         startStreaming(service)
     }
 
     fun setVoipEnabled(enabled: Boolean) {
         _isVoipEnabled.value = enabled
         if (!enabled && isStreaming.get()) {
-            stopStreaming()
+            stopStreaming(stopProjectionService = true)
         }
     }
 
@@ -174,9 +170,8 @@ object CallAudioBridge {
         _txPackets.value = 0
         _rxPackets.value = 0
 
-        // Do not mute phone speaker automatically so AudioFlinger does not attenuate the capture buffer to 0
-        Log.d(TAG, "Démarrage diffusion audio Bluetooth vers BlackBerry (100% Numérique, aucun micro)...")
-        BridgeStateManager.logEvent("Diffusion Audio BB (Pur Numérique)", EventType.INFO)
+        Log.d(TAG, "Démarrage diffusion audio Bluetooth vers BlackBerry (Faible latence 250ms)...")
+        BridgeStateManager.logEvent("Diffusion Audio BB (Faible latence 250ms)", EventType.INFO)
 
         // 1. Signal de début exact : "AUDIO_START\n"
         service.sendPacket(BSBPacket("AUDIO_START", emptyList()))
@@ -188,15 +183,40 @@ object CallAudioBridge {
             var isDigital = false
 
             try {
-                // 1. Android 10+ Internal Digital Media Playback Capture (100% pure audio from speakers)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && activeMediaProjection != null) {
+                val isCallActive = com.hamza.blackberrybridge.calls.BridgeInCallService.activeCall != null || com.hamza.blackberrybridge.calls.CallController.isCallActive
+
+                if (isCallActive) {
+                    // Priorité 1 : Capture directe de la ligne d'appel téléphonique (VOICE_COMMUNICATION)
+                    try {
+                        val minBuf = AudioRecord.getMinBufferSize(TARGET_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                        val ar = AudioRecord(
+                            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                            TARGET_SAMPLE_RATE,
+                            AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT,
+                            maxOf(minBuf * 4, PCM_CHUNK_SIZE * 4)
+                        )
+                        if (ar.state == AudioRecord.STATE_INITIALIZED) {
+                            audioRecord = ar
+                            captureRate = TARGET_SAMPLE_RATE
+                            captureChannels = 1
+                            isDigital = false
+                            Log.d(TAG, "AudioRecord initialisé pour appel téléphonique (VOICE_COMMUNICATION)")
+                            BridgeStateManager.logEvent("Audio Appel téléphonique connecté (Ligne)", EventType.SUCCESS)
+                        } else {
+                            ar.release()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Échec capture vocale appel: ${e.message}")
+                    }
+                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && activeMediaProjection != null) {
+                    // Priorité 2 : Capture numérique interne des haut-parleurs (YouTube, Musique, Médias)
                     val captureConfig = AudioPlaybackCaptureConfiguration.Builder(activeMediaProjection!!)
                         .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
                         .addMatchingUsage(AudioAttributes.USAGE_GAME)
                         .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
                         .build()
 
-                    // Try native sample rates and channels that Android AudioFlinger supports
                     val configs = listOf(
                         Triple(48000, AudioFormat.CHANNEL_IN_STEREO, 2),
                         Triple(48000, AudioFormat.CHANNEL_IN_MONO, 1),
@@ -228,8 +248,8 @@ object CallAudioBridge {
                                 captureRate = sr
                                 captureChannels = chCount
                                 isDigital = true
-                                Log.d(TAG, "AudioPlaybackCapture (Son Numérique YouTube/Musique) INITIALISÉ : ${sr}Hz ${chCount}ch (buf: ${bufferBytes}b)")
-                                BridgeStateManager.logEvent("Audio Numérique YouTube/Médias connecté (${sr}Hz)", EventType.SUCCESS)
+                                Log.d(TAG, "AudioPlaybackCapture INITIALISÉ : ${sr}Hz ${chCount}ch (buf: ${bufferBytes}b)")
+                                BridgeStateManager.logEvent("Audio Numérique connecté (${sr}Hz)", EventType.SUCCESS)
                                 break
                             } else {
                                 ar.release()
@@ -242,34 +262,6 @@ object CallAudioBridge {
 
                 _isDigitalCapture.value = isDigital
 
-                // Telephony voice call capture: ONLY when a phone call is actively ongoing
-                val isCallActive = com.hamza.blackberrybridge.calls.BridgeInCallService.activeCall != null || com.hamza.blackberrybridge.calls.CallController.isCallActive
-                if (isCallActive && (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED)) {
-                    try {
-                        val minBuf = AudioRecord.getMinBufferSize(TARGET_SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                        val ar = AudioRecord(
-                            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                            TARGET_SAMPLE_RATE,
-                            AudioFormat.CHANNEL_IN_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            maxOf(minBuf * 4, PCM_CHUNK_SIZE * 4)
-                        )
-                        if (ar.state == AudioRecord.STATE_INITIALIZED) {
-                            audioRecord = ar
-                            captureRate = TARGET_SAMPLE_RATE
-                            captureChannels = 1
-                            isDigital = false
-                            Log.d(TAG, "AudioRecord initialisé pour appel téléphonique (VOICE_COMMUNICATION)")
-                            BridgeStateManager.logEvent("Audio Appel téléphonique connecté (Ligne)", EventType.SUCCESS)
-                        } else {
-                            ar.release()
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Échec capture vocale appel: ${e.message}")
-                    }
-                }
-
-                // Strict rule: NEVER use the microphone for media. If digital capture is not initialized, wait or notify.
                 if (audioRecord == null || audioRecord.state != AudioRecord.STATE_INITIALIZED) {
                     Log.w(TAG, "Aucune source audio valide disponible (zéro micro)")
                     BridgeStateManager.logEvent("En attente validation 'Commencer' pour audio numérique", EventType.WARNING)
@@ -278,27 +270,27 @@ object CallAudioBridge {
                 if (audioRecord != null && audioRecord.state == AudioRecord.STATE_INITIALIZED) {
                     audioRecord.startRecording()
 
-                    // Samples needed for 500 ms at current capture rate
-                    val frameCountFor500ms = (captureRate * 0.5).toInt()
-                    val totalShortsFor500ms = frameCountFor500ms * captureChannels
-                    val captureBuffer = ShortArray(totalShortsFor500ms)
+                    // Chunks rapides de 250 ms pour supprimer tout retard de 10s
+                    val frameCountForChunk = (captureRate * 0.25).toInt()
+                    val totalShortsForChunk = frameCountForChunk * captureChannels
+                    val captureBuffer = ShortArray(totalShortsForChunk)
                     val txCounter = AtomicInteger(0)
 
                     val targetRate = _sampleRate.value
-                    val targetSamples = (targetRate * 0.5).toInt()
+                    val targetSamples = (targetRate * 0.25).toInt()
                     val targetPcmBytes = targetSamples * 2
 
                     while (isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
                         var shortsRead = 0
-                        while (shortsRead < totalShortsFor500ms && isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
-                            val toRead = minOf(1024, totalShortsFor500ms - shortsRead)
+                        while (shortsRead < totalShortsForChunk && isStreaming.get() && isActive && BridgeStateManager.isConnected.value) {
+                            val toRead = minOf(512, totalShortsForChunk - shortsRead)
                             val r = audioRecord.read(captureBuffer, shortsRead, toRead)
                             if (r > 0) {
                                 shortsRead += r
                             } else if (r == 0) {
-                                delay(5)
+                                delay(3)
                             } else {
-                                delay(10)
+                                delay(5)
                                 try {
                                     if (audioRecord.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
                                         audioRecord.startRecording()
@@ -308,10 +300,10 @@ object CallAudioBridge {
                         }
 
                         if (shortsRead > 0) {
-                            // High-Fidelity Resample to targetRate (16kHz HD or 8kHz)
+                            // Re-échantillonnage haute fidélité vers targetRate (8kHz ou 16kHz)
                             val resampled = resampleAudio(captureBuffer, shortsRead, captureRate, targetRate, captureChannels, targetSamples)
 
-                            // Convert to Little-Endian PCM bytes
+                            // Conversion en octets Little-Endian
                             val pcmBytes = ByteArray(targetPcmBytes)
                             for (i in 0 until targetSamples) {
                                 val s = resampled[i].toInt()
@@ -319,7 +311,7 @@ object CallAudioBridge {
                                 pcmBytes[i * 2 + 1] = ((s shr 8) and 0xFF).toByte()
                             }
 
-                            // Assemblage du fichier WAV complet
+                            // Assemblage du fichier WAV complet de 250 ms
                             val wavHeader = createWavHeader(targetPcmBytes, targetRate, TARGET_CHANNELS, TARGET_BITS_PER_SAMPLE)
                             val fullWav = ByteArray(44 + targetPcmBytes)
                             System.arraycopy(wavHeader, 0, fullWav, 0, 44)
@@ -328,14 +320,14 @@ object CallAudioBridge {
                             // Encodage Base64 strict NO_WRAP
                             val base64 = Base64.encodeToString(fullWav, Base64.NO_WRAP)
 
-                            // Envoi Bluetooth : "AUDIO_CHUNK|<base64_wav>\n"
+                            // Envoi Bluetooth ultra-rapide (5,3 Ko par paquet)
                             service.sendPacket(BSBPacket("AUDIO_CHUNK", listOf(base64)))
 
                             val count = txCounter.incrementAndGet()
                             _txPackets.value = count
                             _totalBytesSent.value = _totalBytesSent.value + fullWav.size
 
-                            // Calculate RMS signal level for live VU-meter feedback
+                            // Mesure du niveau RMS en temps réel
                             var sumSquares = 0.0
                             for (i in 0 until targetSamples) {
                                 val sample = resampled[i].toDouble()
@@ -344,7 +336,7 @@ object CallAudioBridge {
                             val rms = kotlin.math.sqrt(sumSquares / targetSamples)
                             val normalizedLevel = (rms / 6000.0).coerceIn(0.0, 1.0).toFloat()
                             _audioLevel.value = normalizedLevel
-                            val isSignalPresent = rms > 60.0
+                            val isSignalPresent = rms > 50.0
                             _hasAudioSignal.value = isSignalPresent
                             _captureStatus.value = if (isSignalPresent) {
                                 "Signal audio détecté (${(normalizedLevel * 100).toInt()}% niveau)"
@@ -352,7 +344,7 @@ object CallAudioBridge {
                                 "Capture active - Silence détecté (lancez YouTube ou Musique)"
                             }
                         } else {
-                            delay(20)
+                            delay(10)
                         }
                     }
                 } else {
@@ -427,7 +419,7 @@ object CallAudioBridge {
         return output
     }
 
-    fun stopStreaming() {
+    fun stopStreaming(stopProjectionService: Boolean = true) {
         if (!isStreaming.getAndSet(false)) return
         _isBridgeActive.value = false
         _isDigitalCapture.value = false
@@ -454,16 +446,18 @@ object CallAudioBridge {
         BluetoothService.instance?.sendPacket(BSBPacket("AUDIO_STOP", emptyList()))
         BridgeStateManager.logEvent("Diffusion Audio BB arrêtée", EventType.INFO)
 
-        // Stop AudioProjectionService
-        try {
-            val s = BluetoothService.instance
-            if (s != null) {
-                val stopIntent = Intent(s, AudioProjectionService::class.java).apply {
-                    action = AudioProjectionService.ACTION_STOP
+        // Stop AudioProjectionService ONLY if explicitly requested (not during calls!)
+        if (stopProjectionService) {
+            try {
+                val s = BluetoothService.instance
+                if (s != null) {
+                    val stopIntent = Intent(s, AudioProjectionService::class.java).apply {
+                        action = AudioProjectionService.ACTION_STOP
+                    }
+                    s.startService(stopIntent)
                 }
-                s.startService(stopIntent)
-            }
-        } catch (e: Exception) {}
+            } catch (e: Exception) {}
+        }
 
         try {
             callAudioTrack?.stop()
