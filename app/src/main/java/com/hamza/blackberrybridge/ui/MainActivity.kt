@@ -154,6 +154,30 @@ class MainActivity : ComponentActivity() {
             requestPermissionLauncher.launch(ungranted.toTypedArray())
         }
     }
+
+    fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                val powerManager = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
+                if (powerManager != null && !powerManager.isIgnoringBatteryOptimizations(packageName)) {
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Ouverture réglages batterie (Pas de restrictions)", com.hamza.blackberrybridge.state.EventType.INFO)
+                } else {
+                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Batterie déjà configurée sans restrictions", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                }
+            } catch (e: Exception) {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                    startActivity(intent)
+                } catch (t: Throwable) {
+                    android.util.Log.w("MainActivity", "Cannot open battery optimization settings: ${t.message}")
+                }
+            }
+        }
+    }
 }
 
 @Composable

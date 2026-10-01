@@ -461,6 +461,24 @@ fun DualSimCallCard(
                                     label = { Text("📞 8 kHz Voix", fontSize = 10.sp) }
                                 )
                             }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            TextButton(
+                                onClick = {
+                                    MainActivity.instance?.requestBatteryOptimizationExemption()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.BatteryChargingFull, contentDescription = null, modifier = Modifier.size(13.dp), tint = MaterialTheme.colorScheme.primary)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "⚡ MIUI : Pas de restriction batterie (Arrière-plan)",
+                                    fontSize = 10.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                         }
                     }
 

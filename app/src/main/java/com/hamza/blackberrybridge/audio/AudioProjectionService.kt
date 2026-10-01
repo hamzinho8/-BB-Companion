@@ -73,11 +73,15 @@ class AudioProjectionService : Service() {
 
         if (resultCode == Activity.RESULT_OK && resultData != null) {
             try {
-                val notification = buildNotification("Capture audio numérique active")
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+                val notification = buildNotification("Capture audio numérique active (Arrière-plan)")
+                val serviceTypes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                } else {
+                    0
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    startForeground(NOTIFICATION_ID, notification, serviceTypes)
                 } else {
                     startForeground(NOTIFICATION_ID, notification)
                 }
@@ -87,14 +91,14 @@ class AudioProjectionService : Service() {
                 if (mp != null) {
                     mp.registerCallback(object : MediaProjection.Callback() {
                         override fun onStop() {
-                            Log.d(TAG, "MediaProjection arrêté")
-                            CallAudioBridge.stopStreaming()
+                            Log.d(TAG, "MediaProjection onStop notifié par le système")
+                            BridgeStateManager.logEvent("Notification système projection reçue", EventType.INFO)
                         }
                     }, android.os.Handler(android.os.Looper.getMainLooper()))
                     mediaProjection = mp
                     CallAudioBridge.activeMediaProjection = mp
                     Log.d(TAG, "MediaProjection initialisé et callback enregistré !")
-                    BridgeStateManager.logEvent("MediaProjection validé (Pur Numérique) !", EventType.SUCCESS)
+                    BridgeStateManager.logEvent("MediaProjection validé (Arrière-plan actif) !", EventType.SUCCESS)
                 } else {
                     Log.e(TAG, "MediaProjectionManager.getMediaProjection a retourné null")
                     CallAudioBridge.activeMediaProjection = null
@@ -146,8 +150,10 @@ class AudioProjectionService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Diffusion Audio Numérique BlackBerry",
-                NotificationManager.IMPORTANCE_LOW
-            )
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply {
+                description = "Maintient la capture audio numérique active même quand l'application est en arrière-plan."
+            }
             manager.createNotificationChannel(channel)
         }
     }
@@ -157,7 +163,8 @@ class AudioProjectionService : Service() {
             .setContentTitle("Écouteurs BlackBerry Curve 9300")
             .setContentText(text)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setOngoing(true)
             .build()
     }
