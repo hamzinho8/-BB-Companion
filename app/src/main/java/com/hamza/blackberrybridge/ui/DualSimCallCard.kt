@@ -419,7 +419,7 @@ fun DualSimCallCard(
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "📤 $txPackets blocs (~${txPackets / 2}s audio)",
+                                        text = "📤 $txPackets blocs (~${txPackets / 5}s direct)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.primary,
                                         fontWeight = FontWeight.SemiBold
@@ -430,7 +430,7 @@ fun DualSimCallCard(
                                         color = MaterialTheme.colorScheme.secondary
                                     )
                                     Text(
-                                        text = "🎛️ ${currentSampleRate / 1000}kHz HD",
+                                        text = "🎛️ 16kHz HD (DSP 120Hz)",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )
@@ -438,27 +438,22 @@ fun DualSimCallCard(
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            // Audio Quality Selector
+                            // DSP Audio Configuration Badge
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Qualité :",
+                                    text = "Filtres DSP :",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 FilterChip(
-                                    selected = currentSampleRate == 16000,
-                                    onClick = { com.hamza.blackberrybridge.audio.CallAudioBridge.setSampleRate(16000) },
-                                    label = { Text("💎 16 kHz HD", fontSize = 10.sp) }
-                                )
-                                FilterChip(
-                                    selected = currentSampleRate == 8000,
-                                    onClick = { com.hamza.blackberrybridge.audio.CallAudioBridge.setSampleRate(8000) },
-                                    label = { Text("📞 8 kHz Voix", fontSize = 10.sp) }
+                                    selected = true,
+                                    onClick = {},
+                                    label = { Text("🛡️ HPF 120Hz + Limiteur -3dB", fontSize = 10.sp) }
                                 )
                             }
 
