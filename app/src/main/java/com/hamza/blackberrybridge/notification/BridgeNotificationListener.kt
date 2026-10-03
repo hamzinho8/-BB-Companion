@@ -50,6 +50,12 @@ class BridgeNotificationListener : NotificationListenerService() {
         val packageName = sbn.packageName
         if (packageName == applicationContext.packageName) return
 
+        // Traitement prioritaire WhatsApp (Appels & Messages)
+        if (com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.isWhatsAppPackage(packageName)) {
+            val handled = com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.handleNotificationPosted(this, sbn)
+            if (handled) return
+        }
+
         // CRITICAL FIX: Filter out phone calls, dialers, telecom, and ongoing system notifications.
         // Google Dialer and Samsung InCallUI update their notification every 100ms with call duration timer,
         // which floods the Bluetooth link and causes BlackBerry OS process to crash (ANR / process terminated).
@@ -102,6 +108,7 @@ class BridgeNotificationListener : NotificationListenerService() {
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.handleNotificationRemoved(sbn)
         activeNotifications.remove(sbn.key)
     }
 

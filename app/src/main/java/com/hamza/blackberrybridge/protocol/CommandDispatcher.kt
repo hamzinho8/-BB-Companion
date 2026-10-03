@@ -190,6 +190,41 @@ object CommandDispatcher {
                     CallController.sendDtmf(service, digit)
                 }
             }
+            "WHATSAPP_CALL_ANSWER" -> {
+                val callId = if (packet.args.isNotEmpty()) packet.args[0] else ""
+                com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.answerCall(service, callId)
+            }
+            "WHATSAPP_CALL_REJECT", "WHATSAPP_CALL_END" -> {
+                val callId = if (packet.args.isNotEmpty()) packet.args[0] else ""
+                com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.rejectCall(service, callId)
+            }
+            "WHATSAPP_REPLY" -> {
+                if (packet.args.size >= 2) {
+                    val notifId = packet.args[0]
+                    val replyRaw = packet.args[1]
+                    val replyText = try {
+                        val decoded = android.util.Base64.decode(replyRaw, android.util.Base64.DEFAULT)
+                        String(decoded, Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        replyRaw
+                    }
+                    com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.replyMessage(service, notifId, replyText)
+                }
+            }
+            "WHATSAPP_START_CHAT", "WHATSAPP_SEND" -> {
+                if (packet.args.isNotEmpty()) {
+                    val number = packet.args[0]
+                    val message = if (packet.args.size > 1) {
+                        try {
+                            val decoded = android.util.Base64.decode(packet.args[1], android.util.Base64.DEFAULT)
+                            String(decoded, Charsets.UTF_8)
+                        } catch (e: Exception) {
+                            packet.args[1]
+                        }
+                    } else ""
+                    com.hamza.blackberrybridge.whatsapp.WhatsAppBridgeManager.startChat(service, number, message)
+                }
+            }
         }
     }
 }

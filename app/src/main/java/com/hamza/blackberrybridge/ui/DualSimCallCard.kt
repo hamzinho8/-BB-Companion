@@ -741,6 +741,98 @@ fun DualSimCallCard(
                     }
                 }
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // WhatsApp Bridge Card (Appels & Messages)
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("🟢", fontSize = 16.sp)
+                        Text(
+                            text = "WhatsApp Bridge (Appels & Messages)",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "• Appels WhatsApp : Notification avec nom, décrochage touche verte et rejet touche rouge du Curve 9300.\n" +
+                               "• Messages WhatsApp : Réception avec LED, lecture du texte et réponse rédigée sur le clavier physique.",
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+                                if (service != null && com.hamza.blackberrybridge.state.BridgeStateManager.isConnected.value) {
+                                    val testCallId = "wa_test_" + System.currentTimeMillis()
+                                    service.sendPacket(
+                                        com.hamza.blackberrybridge.protocol.BSBPacket(
+                                            "WHATSAPP_CALL_INCOMING",
+                                            listOf(testCallId, "Alice (WhatsApp)")
+                                        )
+                                    )
+                                    testSpeakerFeedback = "Appel WhatsApp de test envoyé au BlackBerry !"
+                                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Test Appel WhatsApp envoyé", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                                } else {
+                                    testSpeakerFeedback = "Erreur : BlackBerry non connecté via Bluetooth"
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text("📞 Test Appel WA", fontSize = 10.sp)
+                        }
+
+                        Button(
+                            onClick = {
+                                val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+                                if (service != null && com.hamza.blackberrybridge.state.BridgeStateManager.isConnected.value) {
+                                    val notifId = "wa_msg_" + System.currentTimeMillis()
+                                    val sampleText = "Salut ! Tu peux me répondre directement depuis le clavier de ton BlackBerry ?"
+                                    val base64 = android.util.Base64.encodeToString(sampleText.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+                                    service.sendPacket(
+                                        com.hamza.blackberrybridge.protocol.BSBPacket(
+                                            "WHATSAPP_MSG",
+                                            listOf(notifId, "Alice (WhatsApp)", base64, System.currentTimeMillis().toString())
+                                        )
+                                    )
+                                    testSpeakerFeedback = "Message WhatsApp de test envoyé au BlackBerry !"
+                                    com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("Test Message WhatsApp envoyé", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                                } else {
+                                    testSpeakerFeedback = "Erreur : BlackBerry non connecté via Bluetooth"
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Text("💬 Test Msg WA", fontSize = 10.sp)
+                        }
+                    }
+                }
+            }
         }
     }
 }
