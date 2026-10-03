@@ -60,6 +60,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         var instance: MainActivity? = null
+        const val EXTRA_START_AUDIO_CAPTURE = "extra_start_audio_capture"
     }
 
     private val mediaProjectionLauncher =
@@ -105,6 +106,7 @@ class MainActivity : ComponentActivity() {
         instance = this
         enableEdgeToEdge()
         requestPermissions()
+        handleIntent(intent)
 
         setContent {
             MyApplicationTheme {
@@ -112,6 +114,17 @@ class MainActivity : ComponentActivity() {
                     AppNavigation(modifier = Modifier.padding(innerPadding))
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_START_AUDIO_CAPTURE, false) == true) {
+            requestMediaProjectionAndStartAudio()
         }
     }
 

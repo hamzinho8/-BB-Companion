@@ -143,6 +143,7 @@ object AudioStreamManager {
         _txPackets.value = 0
         _rxPackets.value = 0
         hpf.reset()
+        com.hamza.blackberrybridge.widget.BridgeWidgetProvider.updateAllWidgets(service)
 
         Log.d(TAG, "Démarrage AudioStreamManager (16kHz, 200ms, DSP HPF 120Hz + Headroom -3dB)...")
         BridgeStateManager.logEvent("Diffusion 16kHz HD (200ms / DSP 120Hz)", EventType.INFO)
@@ -450,6 +451,13 @@ object AudioStreamManager {
         streamJob?.cancel()
         streamJob = null
         hpf.reset()
+
+        try {
+            val ctx = BluetoothService.instance ?: com.hamza.blackberrybridge.ui.MainActivity.instance
+            if (ctx != null) {
+                com.hamza.blackberrybridge.widget.BridgeWidgetProvider.updateAllWidgets(ctx)
+            }
+        } catch (e: Exception) {}
 
         // Restauration du volume haut-parleur smartphone
         try {

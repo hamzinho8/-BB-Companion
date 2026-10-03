@@ -1,26 +1,144 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="horizontal"
     android:background="@drawable/widget_bg"
-    android:padding="16dp">
+    android:padding="12dp"
+    android:gravity="center_vertical">
 
-    <TextView
-        android:id="@+id/widget_title"
+    <!-- Colonne Gauche : Silhouette du BlackBerry Curve 9300 -->
+    <LinearLayout
+        android:id="@+id/widget_silhouette_container"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="BB Bridge"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold" />
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:paddingEnd="10dp">
 
-    <TextView
-        android:id="@+id/widget_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/widget_title"
-        android:text="Status: Active"
-        android:textColor="#4CAF50"
-        android:textSize="12sp"
-        android:layout_marginTop="4dp" />
-</RelativeLayout>
+        <ImageView
+            android:id="@+id/widget_phone_silhouette"
+            android:layout_width="54dp"
+            android:layout_height="96dp"
+            android:contentDescription="BlackBerry Curve 9300"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_bb_curve_silhouette" />
+    </LinearLayout>
+
+    <!-- Colonne Droite : Informations, Statut & Contrôle Audio -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:gravity="center_vertical">
+
+        <!-- Ligne 1 : Titre BlackBerry Bridge & Statut Bluetooth -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:contentDescription="BlackBerry Logo"
+                android:src="@drawable/ic_bb_logo" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="BB BRIDGE"
+                android:textColor="#F1F5F9"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <!-- Statut Bluetooth (Connecté / Déconnecté) -->
+            <TextView
+                android:id="@+id/widget_bt_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="● Connecté"
+                android:textColor="#00E5FF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Ligne 2 : Modèle & Badge Batterie -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="5dp"
+            android:layout_marginBottom="6dp">
+
+            <TextView
+                android:id="@+id/widget_model_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Curve 9300 3G"
+                android:textColor="#94A3B8"
+                android:textSize="11sp" />
+
+            <!-- Badge Niveau de Batterie -->
+            <TextView
+                android:id="@+id/widget_battery_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/widget_tag_bg"
+                android:paddingStart="8dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="2dp"
+                android:text="🔋 85%"
+                android:textColor="#E2E8F0"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- Ligne 3 : Bouton Interactif ON/OFF pour basculer le son -->
+        <LinearLayout
+            android:id="@+id/widget_btn_audio_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="38dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/widget_btn_audio_off"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:id="@+id/widget_btn_audio_icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▶"
+                android:textColor="#38BDF8"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_btn_audio_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="Diffuser le son (16kHz)"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:maxLines="1" />
+        </LinearLayout>
+
+    </LinearLayout>
+</LinearLayout>

@@ -66,6 +66,7 @@ object BridgeStateManager {
             _batteryLevel.value = null
             _rssiLevel.value = null
         }
+        notifyWidgetUpdate()
     }
 
     fun updateDiscoveredDevices(devices: List<BluetoothDevice>) {
@@ -78,6 +79,17 @@ object BridgeStateManager {
 
     fun setBatteryLevel(level: Int) {
         _batteryLevel.value = level
+        notifyWidgetUpdate()
+    }
+
+    private fun notifyWidgetUpdate() {
+        try {
+            val ctx = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance 
+                ?: com.hamza.blackberrybridge.ui.MainActivity.instance
+            if (ctx != null) {
+                com.hamza.blackberrybridge.widget.BridgeWidgetProvider.updateAllWidgets(ctx)
+            }
+        } catch (e: Exception) {}
     }
 
     fun setAlarmRinging(ringing: Boolean) {

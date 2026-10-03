@@ -1,0 +1,160 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="120dp"
+    android:viewportWidth="72"
+    android:viewportHeight="120">
+
+    <!-- BlackBerry Curve 9300 Silhouette -->
+    <!-- Outer Phone Body with Curved Ergonomic Corners -->
+    <path
+        android:fillColor="#151922"
+        android:strokeColor="#3A4252"
+        android:strokeWidth="1.5"
+        android:pathData="M14,2 L58,2 C64.6,2 70,7.4 70,14 L70,106 C70,112.6 64.6,118 58,118 L14,118 C7.4,118 2,112.6 2,106 L2,14 C2,7.4 7.4,2 14,2 Z" />
+
+    <!-- Chrome Side Bevel Inset -->
+    <path
+        android:fillColor="#1F2430"
+        android:pathData="M14,5 L58,5 C63,5 67,9 67,14 L67,106 C67,111 63,115 58,115 L14,115 C9,115 5,111 5,106 L5,14 C5,9 9,5 14,5 Z" />
+
+    <!-- Top Speaker Earpiece -->
+    <path
+        android:fillColor="#4A5260"
+        android:pathData="M27,9 L45,9 C45.5,9 46,9.5 46,10 C46,10.5 45.5,11 45,11 L27,11 C26.5,11 26,10.5 26,10 C26,9.5 26.5,9 27,9 Z" />
+
+    <!-- Notification LED -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M52,10 C52,9.45 52.45,9 53,9 C53.55,9 54,9.45 54,10 C54,10.55 53.55,11 53,11 C52.45,11 52,10.55 52,10 Z" />
+
+    <!-- Screen Bezel -->
+    <path
+        android:fillColor="#0B0E14"
+        android:strokeColor="#2C3240"
+        android:strokeWidth="1"
+        android:pathData="M10,16 L62,16 C63,16 64,17 64,18 L64,54 C64,55 63,56 62,56 L10,56 C9,56 8,55 8,54 L8,18 C8,17 9,16 10,16 Z" />
+
+    <!-- Display Active Content (BlackBerry Curve 320x240 screen) -->
+    <path
+        android:fillColor="#101827"
+        android:pathData="M11,18 L61,18 C61.5,18 62,18.5 62,19 L62,53 C62,53.5 61.5,54 61,54 L11,54 C10.5,54 10,53.5 10,53 L10,19 C10,18.5 10.5,18 11,18 Z" />
+
+    <!-- Screen Status Bar (Top line in cyan) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M12,20 L60,20 L60,21 L12,21 Z" />
+
+    <!-- Screen Mini Graphic / Waveform or Bridge Logo -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M28,34 L32,28 L36,40 L40,30 L44,36 L48,34"
+        android:strokeColor="#38BDF8"
+        android:strokeWidth="1.2" />
+
+    <!-- Central Control Key Row (Green Call, BB Menu, Trackpad, Back, Red End) -->
+    <path
+        android:fillColor="#181D26"
+        android:pathData="M8,59 L64,59 L64,71 L8,71 Z" />
+
+    <!-- Green Call Key (Left) -->
+    <path
+        android:fillColor="#22C55E"
+        android:pathData="M11,62 L20,62 C21,62 21.5,62.5 21.5,63.5 L21.5,66.5 C21.5,67.5 21,68 20,68 L11,68 C10,68 9.5,67.5 9.5,66.5 L9.5,63.5 C9.5,62.5 10,62 11,62 Z" />
+
+    <!-- BB Menu Key -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M23,62 L28,62 C29,62 29.5,62.5 29.5,63.5 L29.5,66.5 C29.5,67.5 29,68 28,68 L23,68 C22,68 21.5,67.5 21.5,66.5 L21.5,63.5 C21.5,62.5 22,62 23,62 Z" />
+
+    <!-- Optical Trackpad (Center, illuminated cyan rim) -->
+    <path
+        android:fillColor="#020617"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="1"
+        android:pathData="M32,61 L40,61 C41,61 42,62 42,63 L42,67 C42,68 41,69 40,69 L32,69 C31,69 30,68 30,67 L30,63 C30,62 31,61 32,61 Z" />
+
+    <!-- Escape / Back Key -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M44,62 L49,62 C50,62 50.5,62.5 50.5,63.5 L50.5,66.5 C50.5,67.5 50,68 49,68 L44,68 C43,68 42.5,67.5 42.5,66.5 L42.5,63.5 C42.5,62.5 43,62 44,62 Z" />
+
+    <!-- Red End Call Key (Right) -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M52,62 L61,62 C62,62 62.5,62.5 62.5,63.5 L62.5,66.5 C62.5,67.5 62,68 61,68 L52,68 C51,68 50.5,67.5 50.5,66.5 L50.5,63.5 C50.5,62.5 51,62 52,62 Z" />
+
+    <!-- 4-Row Physical QWERTY Keyboard with Curved Metallic Frets -->
+    <!-- Fret 1 Divider -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M8,73 L64,73 C64,73 36,75 8,73 Z" />
+
+    <!-- Keyboard Row 1: Q W E R T Y U I O P -->
+    <path
+        android:fillColor="#1E293B"
+        android:strokeColor="#334155"
+        android:strokeWidth="0.5"
+        android:pathData="M9,75 L63,75 C63.5,75 64,75.5 64,76 L64,81 C64,81.5 63.5,82 63,82 L9,82 C8.5,82 8,81.5 8,81 L8,76 C8,75.5 8.5,75 9,75 Z" />
+
+    <!-- Individual Keys Fret Dots Row 1 -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M13,77 L15,77 L15,80 L13,80 Z M19,77 L21,77 L21,80 L19,80 Z M25,77 L27,77 L27,80 L25,80 Z M31,77 L33,77 L33,80 L31,80 Z M37,77 L39,77 L39,80 L37,80 Z M43,77 L45,77 L45,80 L43,80 Z M49,77 L51,77 L51,80 L49,80 Z M55,77 L57,77 L57,80 L55,80 Z" />
+
+    <!-- Fret 2 Divider -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M8,83 L64,83 C64,83 36,85 8,83 Z" />
+
+    <!-- Keyboard Row 2: A S D F G H J K L -->
+    <path
+        android:fillColor="#1E293B"
+        android:strokeColor="#334155"
+        android:strokeWidth="0.5"
+        android:pathData="M9,85 L63,85 C63.5,85 64,85.5 64,86 L64,91 C64,91.5 63.5,92 63,92 L9,92 C8.5,92 8,91.5 8,91 L8,86 C8,85.5 8.5,85 9,85 Z" />
+
+    <!-- Individual Keys Fret Dots Row 2 -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M14,87 L16,87 L16,90 L14,90 Z M20,87 L22,87 L22,90 L20,90 Z M26,87 L28,87 L28,90 L26,90 Z M32,87 L34,87 L34,90 L32,90 Z M38,87 L40,87 L40,90 L38,90 Z M44,87 L46,87 L46,90 L44,90 Z M50,87 L52,87 L52,90 L50,90 Z M56,87 L58,87 L58,90 L56,90 Z" />
+
+    <!-- Fret 3 Divider -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M8,93 L64,93 C64,93 36,95 8,93 Z" />
+
+    <!-- Keyboard Row 3: alt Z X C V B N M $ -->
+    <path
+        android:fillColor="#1E293B"
+        android:strokeColor="#334155"
+        android:strokeWidth="0.5"
+        android:pathData="M10,95 L62,95 C62.5,95 63,95.5 63,96 L63,101 C63,101.5 62.5,102 62,102 L10,102 C9.5,102 9,101.5 9,101 L9,96 C9,95.5 9.5,95 10,95 Z" />
+
+    <!-- Individual Keys Fret Dots Row 3 -->
+    <path
+        android:fillColor="#94A3B8"
+        android:pathData="M15,97 L17,97 L17,100 L15,100 Z M21,97 L23,97 L23,100 L21,100 Z M27,97 L29,97 L29,100 L27,100 Z M33,97 L35,97 L35,100 L33,100 Z M39,97 L41,97 L41,100 L39,100 Z M45,97 L47,97 L47,100 L45,100 Z M51,97 L53,97 L53,100 L51,100 Z M57,97 L59,97 L59,100 L57,100 Z" />
+
+    <!-- Fret 4 Divider -->
+    <path
+        android:fillColor="#475569"
+        android:pathData="M10,103 L62,103 C62,103 36,104.5 10,103 Z" />
+
+    <!-- Keyboard Row 4: shift 0 SPACE sym aA -->
+    <path
+        android:fillColor="#1E293B"
+        android:strokeColor="#334155"
+        android:strokeWidth="0.5"
+        android:pathData="M12,105 L60,105 C60.5,105 61,105.5 61,106 L61,111 C61,111.5 60.5,112 60,112 L12,112 C11.5,112 11,111.5 11,111 L11,106 C11,105.5 11.5,105 12,105 Z" />
+
+    <!-- Space Bar (Center, wider) -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M30,107 L42,107 C42.5,107 43,107.5 43,108 L43,110 C43,110.5 42.5,111 42,111 L30,111 C29.5,111 29,110.5 29,110 L29,108 C29,107.5 29.5,107 30,107 Z" />
+
+    <!-- Bottom Curve Chin Accent -->
+    <path
+        android:fillColor="#334155"
+        android:pathData="M28,114 L44,114 C44.5,114 45,114.3 45,114.7 C45,115.1 44.5,115.4 44,115.4 L28,115.4 C27.5,115.4 27,115.1 27,114.7 C27,114.3 27.5,114 28,114 Z" />
+
+</vector>
