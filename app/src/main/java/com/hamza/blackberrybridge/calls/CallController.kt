@@ -136,6 +136,12 @@ object CallController {
             return
         }
 
+        // Détection automatique des codes USSD (ex: *100#, *123#)
+        if (cleanNumber.startsWith("*") && cleanNumber.endsWith("#")) {
+            sendUssd(context, cleanNumber, requestedSlot)
+            return
+        }
+
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Permission CALL_PHONE missing")
             BridgeStateManager.logEvent("Erreur: Permission CALL_PHONE non accordée", EventType.ERROR)
@@ -220,6 +226,75 @@ object CallController {
         }
         service.sendPacket(BSBPacket("SIM_LIST", args))
         Log.d(TAG, "Sent SIM list to BlackBerry: $args")
+    }
+
+    fun sendDtmf(context: Context, digit: Char) {
+        if (BridgeInCallService.activeCall != null) {
+            BridgeInCallService.activeCall?.playDtmfTone(digit)
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                try {
+                    BridgeInCallService.activeCall?.stopDtmfTone()
+                } catch (e: Exception) {}
+            }, 150)
+            Log.d(TAG, "DTMF $digit envoyé")
+            BridgeStateManager.logEvent("Touche DTMF envoyée : $digit", EventType.INFO)
+            val service = (context as? BluetoothService) ?: BluetoothService.instance
+            service?.sendPacket(BSBPacket("DTMF_OK", listOf(digit.toString())))
+        } else {
+            Log.w(TAG, "Aucun appel actif pour jouer DTMF $digit")
+        }
+    }
+
+    @SuppressLint("MissingPermission")
+    fun sendUssd(context: Context, rawCode: String, requestedSlot: Int? = null) {
+        val cleanCode = rawCode.trim()
+        val service = (context as? BluetoothService) ?: BluetoothService.instance
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val targetSim = SimManager.resolveTargetSim(context, requestedSlot)
+            val subId = targetSim?.subscriptionId ?: -1
+            val telephonyManager = if (subId > 0) {
+                (context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager).createForSubscriptionId(subId)
+            } else {
+                context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+            }
+
+            try {
+                BridgeStateManager.logEvent("Envoi code USSD $cleanCode...", EventType.INFO)
+                telephonyManager.sendUssdRequest(
+                    cleanCode,
+                    object : android.telephony.TelephonyManager.UssdResponseCallback() {
+                        override fun onReceiveUssdResponse(
+                            telephonyManager: android.telephony.TelephonyManager,
+                            request: String,
+                            response: CharSequence
+                        ) {
+                            val responseText = response.toString()
+                            Log.d(TAG, "Réponse USSD reçue pour $request: $responseText")
+                            BridgeStateManager.logEvent("Réponse USSD ($request): $responseText", EventType.SUCCESS)
+                            val base64 = android.util.Base64.encodeToString(responseText.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+                            service?.sendPacket(BSBPacket("USSD_RESPONSE", listOf(request, base64)))
+                        }
+
+                        override fun onReceiveUssdResponseFailed(
+                            telephonyManager: android.telephony.TelephonyManager,
+                            request: String,
+                            failureCode: Int
+                        ) {
+                            Log.w(TAG, "Échec USSD $request (code: $failureCode)")
+                            BridgeStateManager.logEvent("Échec USSD ($request, code $failureCode)", EventType.WARNING)
+                            service?.sendPacket(BSBPacket("USSD_FAILED", listOf(request, failureCode.toString())))
+                        }
+                    },
+                    android.os.Handler(android.os.Looper.getMainLooper())
+                )
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Échec sendUssdRequest, basculement vers ACTION_CALL: ${e.message}")
+            }
+        }
+
+        // Fallback standard via composition
+        makeCall(context, cleanCode, requestedSlot)
     }
 
     private fun sendError(context: Context, callId: String, status: String, reason: String) {

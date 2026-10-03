@@ -159,6 +159,37 @@ object CommandDispatcher {
                     VoiceReplyManager.handleVoiceReply(service, notifId, base64)
                 }
             }
+            "SMS_SEND" -> {
+                if (packet.args.size >= 2) {
+                    val recipient = packet.args[0]
+                    val bodyRaw = packet.args[1]
+                    val body = try {
+                        val decoded = android.util.Base64.decode(bodyRaw, android.util.Base64.DEFAULT)
+                        String(decoded, Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        bodyRaw
+                    }
+                    val slot = if (packet.args.size >= 3) packet.args[2].toIntOrNull() else null
+                    com.hamza.blackberrybridge.sms.SmsManagerBridge.sendSms(service, recipient, body, slot)
+                }
+            }
+            "SMS_GET_RECENT", "SMS_LIST", "GET_SMS" -> {
+                val limit = if (packet.args.isNotEmpty()) packet.args[0].toIntOrNull() ?: 20 else 20
+                com.hamza.blackberrybridge.sms.SmsManagerBridge.fetchRecentSms(service, limit)
+            }
+            "USSD_SEND", "USSD" -> {
+                if (packet.args.isNotEmpty()) {
+                    val code = packet.args[0]
+                    val slot = if (packet.args.size > 1) packet.args[1].toIntOrNull() else null
+                    CallController.sendUssd(service, code, slot)
+                }
+            }
+            "DTMF", "CALL_DTMF", "KEY_PRESS" -> {
+                if (packet.args.isNotEmpty() && packet.args[0].isNotEmpty()) {
+                    val digit = packet.args[0][0]
+                    CallController.sendDtmf(service, digit)
+                }
+            }
         }
     }
 }

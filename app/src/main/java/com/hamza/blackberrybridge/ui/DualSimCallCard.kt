@@ -618,6 +618,81 @@ fun DualSimCallCard(
                     fontWeight = FontWeight.SemiBold
                 )
             }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Physical Keyboard & SMS Control Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Keyboard,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = "Clavier Physique BlackBerry (Appels & SMS)",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "• Touche Appel (Verte) : Décrocher ou lancer l'appel du numéro saisi\n" +
+                               "• Touche Fin (Rouge) : Raccrocher ou rejeter l'appel\n" +
+                               "• Clavier 0-9, *, # : Composition, codes USSD (*100#) et touches DTMF\n" +
+                               "• Touches Volume +/- : Ajuster le volume de communication en direct\n" +
+                               "• Touche Mute : Couper ou réactiver le microphone",
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.85f)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+                            if (service != null && com.hamza.blackberrybridge.state.BridgeStateManager.isConnected.value) {
+                                val sampleSender = "+33600000000"
+                                val sampleName = "BlackBerry Bridge"
+                                val sampleText = "Bonjour ! Votre clavier physique BlackBerry Curve 9300 est synchronisé pour les Appels et SMS."
+                                val base64 = android.util.Base64.encodeToString(sampleText.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+                                service.sendPacket(
+                                    com.hamza.blackberrybridge.protocol.BSBPacket(
+                                        "SMS_INCOMING",
+                                        listOf(sampleSender, sampleName, "0", System.currentTimeMillis().toString(), base64)
+                                    )
+                                )
+                                com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("SMS de test envoyé au BlackBerry", com.hamza.blackberrybridge.state.EventType.SUCCESS)
+                                testSpeakerFeedback = "SMS de test envoyé avec succès sur le BlackBerry !"
+                            } else {
+                                testSpeakerFeedback = "Erreur : BlackBerry non connecté via Bluetooth"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("💬 Envoyer un SMS de test vers le BlackBerry", fontSize = 11.sp)
+                    }
+                }
+            }
         }
     }
 }

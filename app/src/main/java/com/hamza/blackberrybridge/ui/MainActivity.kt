@@ -146,6 +146,9 @@ class MainActivity : ComponentActivity() {
         permissions.add(Manifest.permission.CALL_PHONE)
         permissions.add(Manifest.permission.READ_CONTACTS)
         permissions.add(Manifest.permission.RECORD_AUDIO)
+        permissions.add(Manifest.permission.RECEIVE_SMS)
+        permissions.add(Manifest.permission.SEND_SMS)
+        permissions.add(Manifest.permission.READ_SMS)
 
         val ungranted = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
