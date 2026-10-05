@@ -667,12 +667,18 @@ fun DualSimCallCard(
                             if (service != null && com.hamza.blackberrybridge.state.BridgeStateManager.isConnected.value) {
                                 val sampleSender = "+33600000000"
                                 val sampleName = "BlackBerry Bridge"
-                                val sampleText = "Bonjour ! Votre clavier physique BlackBerry Curve 9300 est synchronisé pour les Appels et SMS."
-                                val base64 = android.util.Base64.encodeToString(sampleText.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+                                val samplePlain = "Bonjour ! Clavier physique BlackBerry synchronise pour SMS."
+                                val base64 = android.util.Base64.encodeToString(samplePlain.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
                                 service.sendPacket(
                                     com.hamza.blackberrybridge.protocol.BSBPacket(
                                         "SMS_INCOMING",
-                                        listOf(sampleSender, sampleName, "0", System.currentTimeMillis().toString(), base64)
+                                        listOf(sampleSender, sampleName, "0", System.currentTimeMillis().toString(), samplePlain, base64)
+                                    )
+                                )
+                                service.sendPacket(
+                                    com.hamza.blackberrybridge.protocol.BSBPacket(
+                                        "SMS_MSG",
+                                        listOf(sampleSender, sampleName, samplePlain, System.currentTimeMillis().toString())
                                     )
                                 )
                                 com.hamza.blackberrybridge.state.BridgeStateManager.logEvent("SMS de test envoyé au BlackBerry", com.hamza.blackberrybridge.state.EventType.SUCCESS)
@@ -689,6 +695,27 @@ fun DualSimCallCard(
                     ) {
                         Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(6.dp))
+                        Text("💬 Envoyer un SMS de test vers le BlackBerry", fontSize = 11.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            val service = com.hamza.blackberrybridge.bluetooth.BluetoothService.instance
+                            if (service != null && com.hamza.blackberrybridge.state.BridgeStateManager.isConnected.value) {
+                                com.hamza.blackberrybridge.sms.SmsManagerBridge.fetchRecentSms(context, 20)
+                                testSpeakerFeedback = "Synchronisation des 20 derniers SMS lancée vers le BlackBerry !"
+                            } else {
+                                testSpeakerFeedback = "Erreur : BlackBerry non connecté via Bluetooth"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("📥 Synchroniser la boîte SMS vers le BlackBerry", fontSize = 11.sp)
                     }
                 }
             }

@@ -17,10 +17,15 @@ import com.hamza.blackberrybridge.state.EventType
 /**
  * Récepteur Broadcast pour les SMS entrants sur Android.
  * Transfère instantanément le SMS au BlackBerry Curve 9300 via Bluetooth.
+ * Fournit à la fois le texte en clair sécurisé ET en Base64 pour compatibilité 100% avec l'app BlackBerry.
  */
 class SmsReceiver : BroadcastReceiver() {
     companion object {
         private const val TAG = "SmsReceiver"
+
+        fun sanitizeForProtocol(text: String): String {
+            return text.replace("|", "-").replace("\n", " ").replace("\r", " ").trim()
+        }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -41,7 +46,7 @@ class SmsReceiver : BroadcastReceiver() {
             }
             val fullBody = fullBodyBuilder.toString()
 
-            // Détection du Slot SIM récepteur (support constructeurs Qualcomm / MTK / Android standard)
+            // Détection du Slot SIM récepteur
             var simSlot = intent.getIntExtra("slot", -1)
             if (simSlot == -1) simSlot = intent.getIntExtra("simId", -1)
             if (simSlot == -1) simSlot = intent.getIntExtra("sim_slot", -1)
@@ -55,14 +60,15 @@ class SmsReceiver : BroadcastReceiver() {
             if (simSlot == -1) simSlot = 0
 
             Log.d(TAG, "SMS reçu de $senderNumber ($contactName) sur SIM $simSlot : ${fullBody.take(40)}...")
-            BridgeStateManager.logEvent("SMS reçu de $contactName [SIM ${simSlot + 1}]", EventType.SUCCESS)
+            BridgeStateManager.logEvent("SMS reçu de $contactName : ${fullBody.take(30)}", EventType.SUCCESS)
 
-            // Encodage Base64 strict NO_WRAP pour préserver accents, retours à la ligne et caractères spéciaux
+            val plainText = sanitizeForProtocol(fullBody)
             val base64Body = Base64.encodeToString(fullBody.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
 
             // Transmission Bluetooth vers le BlackBerry Curve 9300
             val service = BluetoothService.instance
             if (service != null && BridgeStateManager.isConnected.value) {
+                // Format universel : SMS_INCOMING|<numéro>|<nomContact>|<slotSIM>|<timestamp>|<texteEnClair>|<base64>
                 service.sendPacket(
                     BSBPacket(
                         "SMS_INCOMING",
@@ -71,11 +77,26 @@ class SmsReceiver : BroadcastReceiver() {
                             contactName,
                             simSlot.toString(),
                             timestamp.toString(),
+                            plainText,
                             base64Body
                         )
                     )
                 )
-                Log.d(TAG, "SMS transmis au BlackBerry Curve 9300 !")
+
+                // Envoi d'un alias SMS_MSG pour les implémentations BlackBerry alternatives
+                service.sendPacket(
+                    BSBPacket(
+                        "SMS_MSG",
+                        listOf(
+                            senderNumber,
+                            contactName,
+                            plainText,
+                            timestamp.toString()
+                        )
+                    )
+                )
+
+                Log.d(TAG, "SMS transmis au BlackBerry Curve 9300 (clair + base64) !")
             } else {
                 Log.d(TAG, "BlackBerry non connecté - SMS enregistré en local")
             }

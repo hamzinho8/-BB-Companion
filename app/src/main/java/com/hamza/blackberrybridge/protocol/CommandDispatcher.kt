@@ -159,21 +159,19 @@ object CommandDispatcher {
                     VoiceReplyManager.handleVoiceReply(service, notifId, base64)
                 }
             }
-            "SMS_SEND" -> {
+            "SMS_SEND", "SEND_SMS", "SMS_OUT", "SMS" -> {
                 if (packet.args.size >= 2) {
                     val recipient = packet.args[0]
-                    val bodyRaw = packet.args[1]
-                    val body = try {
-                        val decoded = android.util.Base64.decode(bodyRaw, android.util.Base64.DEFAULT)
-                        String(decoded, Charsets.UTF_8)
-                    } catch (e: Exception) {
-                        bodyRaw
-                    }
-                    val slot = if (packet.args.size >= 3) packet.args[2].toIntOrNull() else null
-                    com.hamza.blackberrybridge.sms.SmsManagerBridge.sendSms(service, recipient, body, slot)
+                    // If the last argument is an integer 0 or 1, treat as slot index, otherwise rejoin
+                    val lastArg = packet.args.last()
+                    val hasSlot = packet.args.size >= 3 && (lastArg == "0" || lastArg == "1")
+                    val slot = if (hasSlot) lastArg.toIntOrNull() else null
+                    val bodyArgs = if (hasSlot) packet.args.subList(1, packet.args.size - 1) else packet.args.subList(1, packet.args.size)
+                    val bodyRaw = bodyArgs.joinToString("|")
+                    com.hamza.blackberrybridge.sms.SmsManagerBridge.sendSms(service, recipient, bodyRaw, slot)
                 }
             }
-            "SMS_GET_RECENT", "SMS_LIST", "GET_SMS" -> {
+            "SMS_GET_RECENT", "SMS_LIST", "GET_SMS", "SMS_SYNC", "SMS_INBOX", "READ_SMS", "SYNC_SMS", "GET_MESSAGES" -> {
                 val limit = if (packet.args.isNotEmpty()) packet.args[0].toIntOrNull() ?: 20 else 20
                 com.hamza.blackberrybridge.sms.SmsManagerBridge.fetchRecentSms(service, limit)
             }
