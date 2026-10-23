@@ -59,19 +59,22 @@ object AudioStreamManager {
     const val SAMPLES_PER_CHUNK = (SAMPLE_RATE * (CHUNK_DURATION_MS / 1000.0)).toInt() // 3200
     const val PCM_CHUNK_BYTES = SAMPLES_PER_CHUNK * (BITS_PER_SAMPLE / 8) // 6400
 
-    // Headroom limiter factor (-2.5 dB à -3 dB)
-    private const val HEADROOM_FACTOR = 0.75f
+    // Amplification vocale dynamique calibrée pour l'enceinte miniature du BlackBerry Curve 9300
+    // Valeur par défaut 1.8x (+5.1 dB) pour éliminer le volume faible tout en préservant la netteté
+    var voiceGainMultiplier: Float = 1.8f
+    var isVoiceBoostEnabled: Boolean = true
 
     // État d'exécution
     private val isStreaming = AtomicBoolean(false)
     private var streamJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO + Job())
 
-    // Filtre Passe-Haut 120 Hz IIR (Fréquence de coupure fc = 120 Hz @ fs = 16000 Hz)
-    private class HighPassFilter120Hz(sampleRate: Int = 16000, cutoffHz: Double = 120.0) {
+    // Filtre Passe-Haut 80 Hz IIR (Fréquence de coupure fc = 80 Hz @ fs = 16000 Hz)
+    // Préserve le timbre et la chaleur de la voix (100 Hz - 300 Hz) tout en éliminant les bruits de manipulation
+    private class HighPassFilter80Hz(sampleRate: Int = 16000, cutoffHz: Double = 80.0) {
         private val rc = 1.0 / (2.0 * Math.PI * cutoffHz)
         private val dt = 1.0 / sampleRate
-        private val alpha = rc / (rc + dt) // ~0.9550
+        private val alpha = rc / (rc + dt) // ~0.9695
         private var prevInput = 0.0
         private var prevOutput = 0.0
 
@@ -88,7 +91,7 @@ object AudioStreamManager {
         }
     }
 
-    private val hpf = HighPassFilter120Hz(SAMPLE_RATE, 120.0)
+    private val hpf = HighPassFilter80Hz(SAMPLE_RATE, 80.0)
 
     // Métriques & États observables pour l'UI
     private val _isStreamingFlow = MutableStateFlow(false)
@@ -185,6 +188,30 @@ object AudioStreamManager {
                     } catch (e: Exception) {
                         Log.w(TAG, "Échec init capture vocale 16kHz: ${e.message}")
                     }
+
+                    if (audioRecord == null) {
+                        try {
+                            val minBuf = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                            val arMic = AudioRecord(
+                                MediaRecorder.AudioSource.MIC,
+                                SAMPLE_RATE,
+                                AudioFormat.CHANNEL_IN_MONO,
+                                AudioFormat.ENCODING_PCM_16BIT,
+                                maxOf(minBuf * 4, PCM_CHUNK_BYTES * 4)
+                            )
+                            if (arMic.state == AudioRecord.STATE_INITIALIZED) {
+                                audioRecord = arMic
+                                captureRate = SAMPLE_RATE
+                                captureChannels = 1
+                                isDigital = false
+                                Log.d(TAG, "AudioRecord MIC 16kHz initialisé en fallback")
+                            } else {
+                                arMic.release()
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Échec fallback MIC: ${e.message}")
+                        }
+                    }
                 } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && activeMediaProjection != null) {
                     // Capture numérique interne des haut-parleurs (YouTube, Musique, Médias)
                     val captureConfig = AudioPlaybackCaptureConfiguration.Builder(activeMediaProjection!!)
@@ -278,13 +305,25 @@ object AudioStreamManager {
                             val resampled = resampleTo16000Mono(captureBuffer, shortsRead, captureRate, captureChannels)
 
                             // 2. Traitement du signal DSP :
-                            //    - Filtre Passe-Haut 120 Hz (élimination des sous-basses qui font saturer la membrane BB)
-                            //    - Limiteur doux Headroom (-3 dB / 0.75x) pour éviter tout écrêtage numérique
+                            //    - Filtre Passe-Haut 80 Hz (conserve les harmoniques vocales 100-300 Hz)
+                            //    - Amplification Dynamique + Limiteur doux Tanh (boost vocal +5dB sans écrêtage dur)
                             var sumSquares = 0.0
+                            val gain = if (isVoiceBoostEnabled) voiceGainMultiplier else 1.0f
                             for (i in 0 until SAMPLES_PER_CHUNK) {
                                 val raw = resampled[i].toDouble()
                                 val filtered = hpf.process(raw)
-                                val limited = (filtered * HEADROOM_FACTOR).toInt().coerceIn(-32768, 32767).toShort()
+                                val amplified = filtered * gain
+
+                                // Limiteur doux progressif (Soft Clipping Tanh) : permet un volume élevé et clair sans saturation métallique
+                                val limitedVal = if (amplified > 22000.0) {
+                                    22000.0 + (32767.0 - 22000.0) * Math.tanh((amplified - 22000.0) / (32767.0 - 22000.0))
+                                } else if (amplified < -22000.0) {
+                                    -22000.0 + (-32767.0 - -22000.0) * Math.tanh((amplified - -22000.0) / (-32767.0 - -22000.0))
+                                } else {
+                                    amplified
+                                }
+
+                                val limited = limitedVal.toInt().coerceIn(-32768, 32767).toShort()
                                 processedSamples[i] = limited
                                 sumSquares += limited * limited
 
@@ -498,8 +537,9 @@ object AudioStreamManager {
     }
 
     fun onCallStarted(service: BluetoothService) {
-        Log.d(TAG, "onCallStarted: Basculement vers VOICE_COMMUNICATION")
+        Log.d(TAG, "onCallStarted: Basculement vers Bluetooth SCO / InCall audio")
         BridgeStateManager.logEvent("Appel actif : routage audio d'appel vers BlackBerry", EventType.INFO)
+        com.hamza.blackberrybridge.telephony.SimManager.applyCallAudioRoute(service)
         streamJob?.cancel()
         streamJob = null
         isStreaming.set(false)
@@ -536,7 +576,7 @@ object AudioStreamManager {
     }
 
     /**
-     * Bip de test 440 Hz (Note La4) calibré à 16000 Hz 200 ms avec limiteur -3dB
+     * Bip de test 440 Hz (Note La4) calibré à 16000 Hz 200 ms avec dynamique optimale
      */
     fun sendTestBeep(service: BluetoothService) {
         scope.launch {
@@ -545,8 +585,7 @@ object AudioStreamManager {
                 val pcm = ByteArray(PCM_CHUNK_BYTES)
                 for (i in 0 until SAMPLES_PER_CHUNK) {
                     val angle = 2.0 * Math.PI * freq * i / SAMPLE_RATE
-                    // Application du facteur de headroom 0.75
-                    val sample = (Math.sin(angle) * 16000.0 * HEADROOM_FACTOR).toInt().coerceIn(-32768, 32767).toShort()
+                    val sample = (Math.sin(angle) * 22000.0).toInt().coerceIn(-32768, 32767).toShort()
                     pcm[i * 2] = (sample.toInt() and 0xFF).toByte()
                     pcm[i * 2 + 1] = ((sample.toInt() shr 8) and 0xFF).toByte()
                 }
@@ -561,10 +600,10 @@ object AudioStreamManager {
                 service.sendPacket(BSBPacket("AUDIO_CHUNK", listOf(base64)))
                 _txPackets.value = _txPackets.value + 1
                 _totalBytesSent.value = _totalBytesSent.value + fullWav.size
-                _audioLevel.value = 0.75f
+                _audioLevel.value = 0.85f
                 _hasAudioSignal.value = true
-                _captureStatus.value = "Bip de test transmis (16kHz / 200ms / -3dB)"
-                BridgeStateManager.logEvent("Bip test transmis vers BlackBerry (16kHz)", EventType.SUCCESS)
+                _captureStatus.value = "Bip de test transmis (16kHz / HD Boost)"
+                BridgeStateManager.logEvent("Bip test haute clarté vers BlackBerry (16kHz)", EventType.SUCCESS)
                 delay(400)
                 _audioLevel.value = 0f
                 _hasAudioSignal.value = false
@@ -576,6 +615,7 @@ object AudioStreamManager {
 
     /**
      * Lecture du retour voix provenant du micro du BlackBerry pendant un appel
+     * Applique une amplification de +4.6 dB (1.7x) pour assurer une parfaite audibilité
      */
     fun playIncomingVoice(context: Context, base64Data: String) {
         _rxPackets.value = _rxPackets.value + 1
@@ -584,6 +624,18 @@ object AudioStreamManager {
             val offset = if (rawBytes.size > 44 && rawBytes[0] == 'R'.code.toByte()) 44 else 0
             val len = rawBytes.size - offset
             if (len <= 0) return
+
+            // Amplification directe des échantillons vocaux entrants du micro BlackBerry
+            val shortCount = len / 2
+            val amplifiedBytes = ByteArray(len)
+            for (i in 0 until shortCount) {
+                val low = rawBytes[offset + i * 2].toInt() and 0xFF
+                val high = rawBytes[offset + i * 2 + 1].toInt()
+                val sample = (high shl 8) or low
+                val boosted = (sample * 1.7f).toInt().coerceIn(-32768, 32767)
+                amplifiedBytes[i * 2] = (boosted and 0xFF).toByte()
+                amplifiedBytes[i * 2 + 1] = ((boosted shr 8) and 0xFF).toByte()
+            }
 
             if (callAudioTrack == null || callAudioTrack?.state != AudioTrack.STATE_INITIALIZED) {
                 val minBuf = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -606,7 +658,7 @@ object AudioStreamManager {
                     .build()
                 callAudioTrack?.play()
             }
-            callAudioTrack?.write(rawBytes, offset, len)
+            callAudioTrack?.write(amplifiedBytes, 0, len)
         } catch (e: Exception) {
             Log.w(TAG, "Erreur lecture voix BlackBerry: ${e.message}")
         }

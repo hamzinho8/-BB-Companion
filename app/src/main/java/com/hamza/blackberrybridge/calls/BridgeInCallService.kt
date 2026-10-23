@@ -93,6 +93,7 @@ class BridgeInCallService : InCallService() {
                     Call.STATE_ACTIVE, Call.STATE_DIALING, Call.STATE_CONNECTING -> {
                         // Enforce configured audio route when call connects
                         applyAudioRoute(SimManager.audioRoute.value)
+                        SimManager.applyCallAudioRoute(applicationContext)
                     }
                     Call.STATE_DISCONNECTED -> {
                         BluetoothService.instance?.sendPacket(BSBPacket("CALL_END", listOf("DISCONNECTED")))
@@ -103,6 +104,7 @@ class BridgeInCallService : InCallService() {
 
         // Apply audio route immediately on call creation
         applyAudioRoute(SimManager.audioRoute.value)
+        SimManager.applyCallAudioRoute(applicationContext)
     }
 
     override fun onCallRemoved(call: Call) {

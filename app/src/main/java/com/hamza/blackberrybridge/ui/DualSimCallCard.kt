@@ -37,6 +37,7 @@ fun DualSimCallCard(
     val availableSims by SimManager.availableSims.collectAsState()
     val preferredSlot by SimManager.preferredSlot.collectAsState()
     val audioRoute by SimManager.audioRoute.collectAsState()
+    val voiceGain by SimManager.voiceGain.collectAsState()
     val isBtAudioConnected by SimManager.isBluetoothAudioConnected.collectAsState()
     val btDeviceName by SimManager.connectedAudioDeviceName.collectAsState()
     val isBridgeActive by com.hamza.blackberrybridge.audio.CallAudioBridge.isBridgeActive.collectAsState()
@@ -453,8 +454,60 @@ fun DualSimCallCard(
                                 FilterChip(
                                     selected = true,
                                     onClick = {},
-                                    label = { Text("🛡️ HPF 120Hz + Limiteur -3dB", fontSize = 10.sp) }
+                                    label = { Text("⚡ Voix HD Boost (${voiceGain}x) + HPF 80Hz", fontSize = 10.sp) }
                                 )
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            // Puissance Sonore BlackBerry (Boost Vocal)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Volume BB :", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                listOf(1.0f to "Normal", 1.5f to "Fort", 1.8f to "Max HD").forEach { (gainVal, label) ->
+                                    FilterChip(
+                                        selected = kotlin.math.abs(voiceGain - gainVal) < 0.05f,
+                                        onClick = {
+                                             SimManager.setVoiceGain(context, gainVal)
+                                             testSpeakerFeedback = "Gain vocal BlackBerry réglé à ${gainVal}x"
+                                        },
+                                        label = { Text(label, fontSize = 10.sp) }
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(4.dp))
+                            // Routage Appel Téléphonique (SCO Bluetooth vs Haut-Parleur)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text(
+                                    text = "Routage Appel Télécom :",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    listOf(
+                                        SimManager.AUDIO_BLUETOOTH to "🔵 BlackBerry (SCO)",
+                                        SimManager.AUDIO_SPEAKERPHONE to "📢 Haut-Parleur",
+                                        SimManager.AUDIO_EARPIECE to "📱 Écouteur"
+                                    ).forEach { (r, label) ->
+                                        FilterChip(
+                                            selected = audioRoute == r,
+                                            onClick = {
+                                                SimManager.setAudioRoute(context, r)
+                                                SimManager.applyCallAudioRoute(context)
+                                                testSpeakerFeedback = "Routage appel configuré sur : $label"
+                                            },
+                                            label = { Text(label, fontSize = 10.sp) }
+                                        )
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(4.dp))

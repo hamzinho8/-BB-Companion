@@ -38,10 +38,11 @@ object SimManager {
     private const val PREFS_NAME = "bb_sim_settings"
     private const val KEY_PREFERRED_SIM_SLOT = "preferred_sim_slot"
     private const val KEY_AUDIO_ROUTE = "call_audio_route"
+    private const val KEY_VOICE_GAIN = "voice_gain_level"
 
     // Audio route options
-    const val AUDIO_SPEAKERPHONE = "SPEAKERPHONE" // Haut-parleur mains-libres (recommandé)
-    const val AUDIO_BLUETOOTH = "BLUETOOTH"       // Kit mains-libres Bluetooth / SCO
+    const val AUDIO_BLUETOOTH = "BLUETOOTH"       // Kit mains-libres Bluetooth / SCO (Recommandé pour BlackBerry)
+    const val AUDIO_SPEAKERPHONE = "SPEAKERPHONE" // Haut-parleur mains-libres smartphone
     const val AUDIO_EARPIECE = "EARPIECE"         // Écouteur standard smartphone
 
     // Slot settings: -2 = Auto/System, -1 = Prompt, 0 = SIM 1, 1 = SIM 2
@@ -54,8 +55,11 @@ object SimManager {
     private val _preferredSlot = MutableStateFlow(SLOT_SYSTEM_DEFAULT)
     val preferredSlot: StateFlow<Int> = _preferredSlot.asStateFlow()
 
-    private val _audioRoute = MutableStateFlow(AUDIO_SPEAKERPHONE)
+    private val _audioRoute = MutableStateFlow(AUDIO_BLUETOOTH)
     val audioRoute: StateFlow<String> = _audioRoute.asStateFlow()
+
+    private val _voiceGain = MutableStateFlow(1.8f)
+    val voiceGain: StateFlow<Float> = _voiceGain.asStateFlow()
 
     private val _isBluetoothAudioConnected = MutableStateFlow(false)
     val isBluetoothAudioConnected: StateFlow<Boolean> = _isBluetoothAudioConnected.asStateFlow()
@@ -70,7 +74,10 @@ object SimManager {
         if (!isInitialized) {
             val prefs = getPrefs(context)
             _preferredSlot.value = prefs.getInt(KEY_PREFERRED_SIM_SLOT, SLOT_SYSTEM_DEFAULT)
-            _audioRoute.value = prefs.getString(KEY_AUDIO_ROUTE, AUDIO_SPEAKERPHONE) ?: AUDIO_SPEAKERPHONE
+            _audioRoute.value = prefs.getString(KEY_AUDIO_ROUTE, AUDIO_BLUETOOTH) ?: AUDIO_BLUETOOTH
+            val savedGain = prefs.getFloat(KEY_VOICE_GAIN, 1.8f)
+            _voiceGain.value = savedGain
+            com.hamza.blackberrybridge.audio.AudioStreamManager.voiceGainMultiplier = savedGain
             isInitialized = true
         }
         refreshSims(context)
@@ -85,6 +92,14 @@ object SimManager {
         init(context)
         getPrefs(context).edit().putInt(KEY_PREFERRED_SIM_SLOT, slot).apply()
         _preferredSlot.value = slot
+    }
+
+    fun setVoiceGain(context: Context, gain: Float) {
+        init(context)
+        getPrefs(context).edit().putFloat(KEY_VOICE_GAIN, gain).apply()
+        _voiceGain.value = gain
+        com.hamza.blackberrybridge.audio.AudioStreamManager.voiceGainMultiplier = gain
+        Log.d(TAG, "Voice gain set to: $gain")
     }
 
     fun setAudioRoute(context: Context, route: String) {
@@ -237,19 +252,20 @@ object SimManager {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager ?: return
         try {
             // Unmute voice call audio and ensure volume is audible
+            // Unmute voice call audio and ensure volume is maximized
             try {
                 val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_VOICE_CALL)
-                val curVol = audioManager.getStreamVolume(AudioManager.STREAM_VOICE_CALL)
-                if (curVol < maxVol / 2) {
-                    audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, (maxVol * 0.85).toInt(), 0)
-                }
+                audioManager.setStreamVolume(AudioManager.STREAM_VOICE_CALL, maxVol, 0)
             } catch (e: Exception) {
                 // non fatal
             }
 
+            val isPhoneCall = com.hamza.blackberrybridge.calls.BridgeInCallService.activeCall != null ||
+                    com.hamza.blackberrybridge.calls.CallController.isCallActive
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 // Modern Android (API 31+ Android 12, 13, 14, 15)
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                audioManager.mode = if (isPhoneCall) AudioManager.MODE_IN_CALL else AudioManager.MODE_IN_COMMUNICATION
                 val commDevices = audioManager.availableCommunicationDevices
 
                 when (route) {
@@ -271,13 +287,11 @@ object SimManager {
                         if (btDevice != null) {
                             val ok = audioManager.setCommunicationDevice(btDevice)
                             Log.d(TAG, "setCommunicationDevice(BLUETOOTH): success=$ok (${btDevice.productName})")
-                        } else {
-                            Log.w(TAG, "No Bluetooth device in availableCommunicationDevices, trying startBluetoothSco")
-                            @Suppress("DEPRECATION")
-                            audioManager.startBluetoothSco()
-                            @Suppress("DEPRECATION")
-                            audioManager.isBluetoothScoOn = true
                         }
+                        @Suppress("DEPRECATION")
+                        audioManager.startBluetoothSco()
+                        @Suppress("DEPRECATION")
+                        audioManager.isBluetoothScoOn = true
                         @Suppress("DEPRECATION")
                         audioManager.isSpeakerphoneOn = false
                     }
