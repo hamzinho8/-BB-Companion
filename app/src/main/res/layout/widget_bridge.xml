@@ -3,142 +3,245 @@
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:background="@drawable/widget_bg"
-    android:padding="12dp"
+    android:padding="10dp"
     android:gravity="center_vertical">
 
-    <!-- Colonne Gauche : Silhouette du BlackBerry Curve 9300 -->
+    <!-- En-tête : Titre, Statut Bluetooth et Bouton Rafraîchir -->
     <LinearLayout
-        android:id="@+id/widget_silhouette_container"
-        android:layout_width="wrap_content"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:paddingEnd="10dp">
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingBottom="4dp">
 
         <ImageView
-            android:id="@+id/widget_phone_silhouette"
-            android:layout_width="54dp"
-            android:layout_height="96dp"
-            android:contentDescription="BlackBerry Curve 9300"
-            android:scaleType="fitCenter"
-            android:src="@drawable/ic_bb_curve_silhouette" />
+            android:layout_width="14dp"
+            android:layout_height="14dp"
+            android:contentDescription="BlackBerry Logo"
+            android:src="@drawable/ic_bb_logo" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:text="BLACKBERRY BRIDGE"
+            android:textColor="#F1F5F9"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- Espacement sécurisé (RemoteViews compliant) -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Statut Bluetooth Connecté / Déconnecté -->
+        <TextView
+            android:id="@+id/widget_bt_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="● Connecté"
+            android:textColor="#00E5FF"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <!-- Bouton Rafraîchir interactif -->
+        <TextView
+            android:id="@+id/widget_btn_refresh"
+            android:layout_width="26dp"
+            android:layout_height="22dp"
+            android:layout_marginStart="6dp"
+            android:gravity="center"
+            android:background="@drawable/widget_tag_bg"
+            android:text="🔄"
+            android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- Colonne Droite : Informations, Statut & Contrôle Audio -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical"
-        android:gravity="center_vertical">
+    <!-- Séparateur horizontal discret -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#1E293B" />
 
-        <!-- Ligne 1 : Titre BlackBerry Bridge & Statut Bluetooth -->
+    <!-- Corps du Widget : Combiné Curve 9300 et Tableau de Bord Instantané -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="5dp"
+        android:paddingBottom="4dp">
+
+        <!-- Silhouette du BlackBerry Curve 9300 (Cliquer ouvre l'application) -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:id="@+id/widget_phone_container"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingEnd="10dp">
 
             <ImageView
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:contentDescription="BlackBerry Logo"
-                android:src="@drawable/ic_bb_logo" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="BB BRIDGE"
-                android:textColor="#F1F5F9"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-
-            <View
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1" />
-
-            <!-- Statut Bluetooth (Connecté / Déconnecté) -->
-            <TextView
-                android:id="@+id/widget_bt_status"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="● Connecté"
-                android:textColor="#00E5FF"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                android:id="@+id/widget_phone_silhouette"
+                android:layout_width="48dp"
+                android:layout_height="80dp"
+                android:contentDescription="BlackBerry Curve 9300"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_bb_curve_silhouette" />
         </LinearLayout>
 
-        <!-- Ligne 2 : Modèle & Badge Batterie -->
+        <!-- Colonne d'Informations Instantanées -->
         <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginTop="5dp"
-            android:layout_marginBottom="6dp">
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center_vertical">
 
-            <TextView
-                android:id="@+id/widget_model_name"
-                android:layout_width="0dp"
+            <!-- Ligne 1 : Nom du modèle & Badge Batterie -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Curve 9300 3G"
-                android:textColor="#94A3B8"
-                android:textSize="11sp" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
 
-            <!-- Badge Niveau de Batterie -->
-            <TextView
-                android:id="@+id/widget_battery_badge"
-                android:layout_width="wrap_content"
+                <TextView
+                    android:id="@+id/widget_model_name"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Curve 9300 3G"
+                    android:textColor="#F8FAFC"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:maxLines="1" />
+
+                <!-- Badge Batterie -->
+                <TextView
+                    android:id="@+id/widget_battery_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/widget_tag_bg"
+                    android:paddingStart="7dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="7dp"
+                    android:paddingBottom="2dp"
+                    android:text="🔋 85%"
+                    android:textColor="#34D399"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Ligne 2 : Réseau Téléphonique & Canal Audio d'Appel -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/widget_tag_bg"
-                android:paddingStart="8dp"
-                android:paddingTop="2dp"
-                android:paddingEnd="8dp"
-                android:paddingBottom="2dp"
-                android:text="🔋 85%"
-                android:textColor="#E2E8F0"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="3dp">
+
+                <TextView
+                    android:id="@+id/widget_network_info"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📶 SIM 1 (inwi)"
+                    android:textColor="#94A3B8"
+                    android:textSize="10sp"
+                    android:maxLines="1" />
+
+                <TextView
+                    android:id="@+id/widget_call_route_info"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📞 SCO Actif"
+                    android:textColor="#38BDF8"
+                    android:textSize="10sp" />
+            </LinearLayout>
+
+            <!-- Ligne 3 : Synthèse de Synchronisation (WhatsApp, SMS, Média) -->
+            <TextView
+                android:id="@+id/widget_status_summary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:text="💬 WhatsApp, SMS &amp; Clavier Prêts"
+                android:textColor="#64748B"
+                android:textSize="9.5sp"
+                android:maxLines="1" />
         </LinearLayout>
+    </LinearLayout>
 
-        <!-- Ligne 3 : Bouton Interactif ON/OFF pour basculer le son -->
+    <!-- Zone de Bouton Audio Interactif : Deux états distincts par FrameLayout (100% RemoteViews safe) -->
+    <FrameLayout
+        android:id="@+id/widget_btn_audio_toggle_frame"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:layout_marginTop="2dp">
+
+        <!-- État 1 : Inactif (Diffusion Éteinte) -->
         <LinearLayout
-            android:id="@+id/widget_btn_audio_toggle"
+            android:id="@+id/widget_btn_audio_off_layout"
             android:layout_width="match_parent"
-            android:layout_height="38dp"
+            android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center"
             android:background="@drawable/widget_btn_audio_off"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:clickable="true"
-            android:focusable="true">
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
 
             <TextView
-                android:id="@+id/widget_btn_audio_icon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="▶"
                 android:textColor="#38BDF8"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/widget_btn_audio_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:text="Diffuser le son (16kHz)"
+                android:text="Diffuser le son (16kHz HD)"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
                 android:textStyle="bold"
                 android:maxLines="1" />
         </LinearLayout>
 
-    </LinearLayout>
+        <!-- État 2 : Actif (Diffusion Allumée) -->
+        <LinearLayout
+            android:id="@+id/widget_btn_audio_on_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:background="@drawable/widget_btn_audio_on"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⏹"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="Audio Actif vers BlackBerry (16kHz HD)"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:maxLines="1" />
+        </LinearLayout>
+    </FrameLayout>
+
 </LinearLayout>
